@@ -5,7 +5,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const moment = require('moment-timezone');
 const app = express();
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(cors({ origin: "https://aquamitra-ten.vercel.app" }));
 app.use(express.json());
 
 

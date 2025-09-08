@@ -23,7 +23,7 @@ function EmployeeDashboard() {
         const fetchData = async () => {
             try {
                 setLoading(true);
-                const response = await axios.get(`http://localhost:5000/api/employee/dashboard/${employeeId}`, {
+                const response = await axios.get(`https://aquamitra-1.onrender.com/api/employee/dashboard/${employeeId}`, {
                     params: { city: selectedCity }
                 });
                 

@@ -29,10 +29,10 @@ function Signup() {
             let successMessage = "";
 
             if (role === 'user') {
-                url = "http://localhost:5000/api/users/signup";
+                url = "https://aquamitra-1.onrender.com/api/users/signup";
                 successMessage = "Signup successful! Redirecting to login...";
             } else if (role === 'employee') {
-                url = "http://localhost:5000/api/employees/signup";
+                url = "https://aquamitra-1.onrender.com/api/employees/signup";
                 successMessage = "Account setup complete! Redirecting to login...";
             }
             

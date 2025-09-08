@@ -52,7 +52,7 @@ useEffect(() => {
             const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone; // e.g., "Asia/Kolkata"
 
             // --- CHANGED: Add the timezone to the request headers ---
-            const response = await axios.get(`http://localhost:5000/api/dashboard/${user}`, {
+            const response = await axios.get(`https://aquamitra-1.onrender.com/api/dashboard/${user}`, {
                 headers: {
                     'Timezone': userTimeZone
                 }
