@@ -3,8 +3,6 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
-const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json");
 const moment = require('moment-timezone');
 const app = express();
 app.use(cors({ origin: "http://localhost:5173" }));
