@@ -1,7 +1,7 @@
 // src/routes/PublicRoute.js
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import useAuth from '../hooks/useAuth';
+import useAuth from '../hooks/useauth';
 
 const PublicRoute = ({ children }) => {
     const { isAuthenticated, role, loading } = useAuth();
