@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import useAuth from '../hooks/useAuth';
+import useAuth from '../hooks/useauth';
 import axios from 'axios';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
