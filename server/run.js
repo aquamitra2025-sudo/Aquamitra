@@ -122,6 +122,42 @@ app.post('/api/employees/login', async (req, res) => {
     }
 });
 
+app.post('/api/sensordata', async (req, res) => {
+    // Extract data from the request body sent by the ESP32
+    const { userid, DO, Temp } = req.body;
+
+    // Basic validation
+    if (!userid || !DO) {
+        return res.status(400).json({ message: "Missing required fields: userid and DO are required." });
+    }
+
+    try {
+        // Convert the 'DO' value (water consumption) to a number
+        const consumptionAmount = parseFloat(DO);
+        if (isNaN(consumptionAmount)) {
+            return res.status(400).json({ message: "Invalid 'DO' value. Must be a number." });
+        }
+
+        // Create a new transaction record with the sensor data
+        const newTransaction = new Transaction({
+            userId: userid,
+            amount: consumptionAmount
+            // The timestamp is automatically added by the schema
+        });
+
+        // Save the new transaction to the database
+        await newTransaction.save();
+
+        console.log(`Saved new transaction for user ${userid} with amount ${consumptionAmount}`);
+        
+        // Send a success response back to the ESP32
+        res.status(201).json({ message: 'Sensor data received and saved successfully.' });
+
+    } catch (error) {
+        console.error('Error saving sensor data:', error);
+        res.status(500).json({ message: 'Internal server error while saving data.' });
+    }
+});
 
 // --- 📊 DASHBOARD & DATA ROUTES ---
 

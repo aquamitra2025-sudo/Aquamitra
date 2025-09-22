@@ -1,15 +1,9 @@
-// seed.js
+const fs = require("fs");
+const path = require("path");
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
-
 const { Schema } = mongoose;
 
-const userSchema = new Schema({
-  userid: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  threshold: { type: Number, default: 0 },
-});
-
+// --- Public Schema ---
 const publicSchema = new Schema({
   userid: { type: String, required: true, unique: true },
   headcout: Number,
@@ -20,44 +14,7 @@ const publicSchema = new Schema({
   pincode: String,
 });
 
-const employeeSchema = new Schema({
-  userid: { type: String, required: true, unique: true },
-  Name: String,
-  password: { type: String, default: null },
-  isRegistered: { type: Boolean, default: false },
-  country: String,
-  state: String,
-});
-
-const transactionSchema = new Schema({
-  userId: { type: String, required: true }, // store by userid (string)
-  amount: Number,
-  timestamp: { type: Date, default: Date.now },
-});
-
-const complaintSchema = new Schema(
-  {
-    userId: { type: String, required: true },
-    complaintType: {
-      type: String,
-      enum: ["Leakage", "Meter Issue", "Billing Error", "No Water Supply", "Other"],
-      required: true,
-    },
-    description: { type: String, required: true },
-    status: {
-      type: String,
-      enum: ["Submitted", "In Progress", "Resolved", "Closed"],
-      default: "Submitted",
-    },
-  },
-  { timestamps: true }
-);
-
-const User = mongoose.model("user", userSchema);
 const Public = mongoose.model("public", publicSchema);
-const Employee = mongoose.model("employee", employeeSchema);
-const Transaction = mongoose.model("transaction", transactionSchema);
-const Complaint = mongoose.model("complaint", complaintSchema);
 
 // --- Mongo Connection ---
 mongoose
@@ -70,83 +27,21 @@ mongoose
 
 async function seed() {
   try {
-    // Clear old data
-    await User.deleteMany({});
+    // Clear old Public data
     await Public.deleteMany({});
-    await Employee.deleteMany({});
-    await Transaction.deleteMany({});
-    await Complaint.deleteMany({});
 
-    // --- Password hash for users ---
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash("password123", salt);
+    // Load kjson file
+    const kjsonPath = path.join(__dirname, "data.json"); // <--- replace with your actual filename
+    const kjsonData = JSON.parse(fs.readFileSync(kjsonPath, "utf-8"));
 
-    // --- Public + Users ---
-    await Public.insertMany([
-      {
-        userid: "user1",
-        headcout: 4,
-        Country: "India",
-        State: "Tamil Nadu",
-        City: "Chennai",
-        Address: "123 Street A",
-        pincode: "600001",
-      },
-      {
-        userid: "user2",
-        headcout: 3,
-        Country: "India",
-        State: "Tamil Nadu",
-        City: "Madurai",
-        Address: "456 Street B",
-        pincode: "625001",
-      },
-    ]);
-
-    await User.insertMany([
-      { userid: "user1", password: hashedPassword, threshold: 0 },
-      { userid: "user2", password: hashedPassword, threshold: 0 },
-    ]);
-
-    // --- Employee (password = null) ---
-    await Employee.insertMany([
-      {
-        userid: "emp1",
-        Name: "Ravi Kumar",
-        password: null,
-        isRegistered: false,
-        country: "India",
-        state: "Tamil Nadu",
-      },
-    ]);
-
-    // --- Transactions below threshold ---
-    const today = new Date();
-    const transactions = [];
-    const numDays = 10;
-
-    for (let d = 0; d < numDays; d++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - d);
-
-      // user1: headcount = 4 → threshold = 220
-      transactions.push({
-        userId: "user1",
-        amount: 150, // below threshold
-        timestamp: new Date(date),
-      });
-
-      // user2: headcount = 3 → threshold = 165
-      transactions.push({
-        userId: "user2",
-        amount: 120, // below threshold
-        timestamp: new Date(date),
-      });
+    // Insert into Public collection
+    if (Array.isArray(kjsonData)) {
+      await Public.insertMany(kjsonData);
+    } else {
+      console.error("❌ kjson file must be an array of Public documents");
     }
 
-    await Transaction.insertMany(transactions);
-
-    console.log("✅ Database seeded with user1, user2, emp1 and transactions below threshold.");
+    console.log("✅ Public data seeded from kjson file.");
     process.exit();
   } catch (error) {
     console.error("❌ Seeding error:", error);
