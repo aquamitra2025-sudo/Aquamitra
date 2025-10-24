@@ -4,17 +4,13 @@ const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 // --- Public Schema ---
-const publicSchema = new Schema({
-  userid: { type: String, required: true, unique: true },
-  headcout: Number,
-  Country: String,
-  State: String,
-  City: String,
-  Address: String,
-  pincode: String,
+const transactionSchema = new mongoose.Schema({
+    userId: String,
+    amount: Number,
+    timestamp: String
 });
 
-const Public = mongoose.model("public", publicSchema);
+const transactions = mongoose.model("transactions", transactionSchema);
 
 // --- Mongo Connection ---
 mongoose
@@ -28,15 +24,15 @@ mongoose
 async function seed() {
   try {
     // Clear old Public data
-    await Public.deleteMany({});
+    await transactions.deleteMany({});
 
     // Load kjson file
-    const kjsonPath = path.join(__dirname, "data.json"); // <--- replace with your actual filename
+    const kjsonPath = path.join(__dirname, "user_id_aqm001_365 (1).json"); // <--- replace with your actual filename
     const kjsonData = JSON.parse(fs.readFileSync(kjsonPath, "utf-8"));
 
     // Insert into Public collection
     if (Array.isArray(kjsonData)) {
-      await Public.insertMany(kjsonData);
+      await transactions.insertMany(kjsonData);
     } else {
       console.error("❌ kjson file must be an array of Public documents");
     }

@@ -4,8 +4,26 @@ import axios from 'axios';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { format, subDays, startOfWeek, getWeek, getYear, isToday } from 'date-fns';
+import { Droplets, TrendingUp, AlertTriangle, Users, Download, Filter } from 'lucide-react'; // Lucide icons
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+
+// Component for the dashboard statistics cards
+const StatsCard = ({ title, value, detail, Icon, bgColor, textColor }) => (
+    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between">
+            <div>
+                <p className="text-sm font-medium text-gray-600">{title}</p>
+                <p className={`text-2xl font-bold ${textColor}`}>{value}</p>
+                <p className="text-sm text-gray-500">{detail}</p>
+            </div>
+            <div className={`w-12 h-12 ${bgColor} rounded-lg flex items-center justify-center`}>
+                <Icon className={`h-6 w-6 ${textColor}`} />
+            </div>
+        </div>
+    </div>
+);
+
 
 function EmployeeDashboard() {
     const { user: employeeId, logout } = useAuth();
@@ -16,6 +34,8 @@ function EmployeeDashboard() {
     const [error, setError] = useState(null);
     const [availableCities, setAvailableCities] = useState([]);
     const [selectedCity, setSelectedCity] = useState('all');
+    const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
 
     useEffect(() => {
         if (!employeeId) return;
@@ -23,16 +43,22 @@ function EmployeeDashboard() {
         const fetchData = async () => {
             try {
                 setLoading(true);
+                setError(null);
+                
+                // NOTE: Passing selectedCity for filtering API results
                 const response = await axios.get(`https://aquamitra-1.onrender.com/api/employee/dashboard/${employeeId}`, {
-                    params: { city: selectedCity }
+                    params: { city: selectedCity, date: selectedDate }
                 });
                 
                 setEmployeeDetails(response.data.employeeDetails);
                 setTransactions(response.data.transactions);
                 
-                // The API should also send back a list of all cities in the employee's state
+                // Assuming your API returns a clean list of available cities/regions
                 if (response.data.cities) {
                     setAvailableCities(response.data.cities);
+                } else {
+                    // Placeholder regions if API doesn't return them or for initial load
+                    setAvailableCities(["Pallavaram", "Tambaram", "Poonamalle", "Avadi", "Mangadu", "Kundrathur", "Thiruverkadu", "Thiruninravur", "Maraimalai Nagar", "Chengalpattu"]);
                 }
 
             } catch (err) {
@@ -43,9 +69,9 @@ function EmployeeDashboard() {
         };
 
         fetchData();
-    }, [employeeId, selectedCity]);
+    }, [employeeId, selectedCity, selectedDate]); // Dependency on selectedDate/City triggers re-fetch
 
-    // Calculate high-level metrics for the cards at the top
+    // Calculate high-level metrics for the cards at the top (Your original logic remains)
     const dashboardMetrics = useMemo(() => {
         const todaysTransactions = transactions.filter(t => isToday(new Date(t.timestamp)));
         const totalConsumptionToday = todaysTransactions.reduce((acc, curr) => acc + curr.amount, 0);
@@ -55,22 +81,31 @@ function EmployeeDashboard() {
             return acc;
         }, {});
 
+        const totalAllocated = transactions.reduce((acc, curr) => acc + (curr.allocated || 0), 0); // Assuming allocated data is in transactions
+        const totalRemaining = totalAllocated - totalConsumptionToday;
+        
         const topCity = Object.entries(consumptionByCity).sort((a, b) => b[1] - a[1])[0];
 
         return {
+            totalAllocated,
             totalConsumptionToday,
+            totalRemaining,
+            totalHouseholds: transactions.length, // Simplified count
             cityCount: selectedCity === 'all' ? availableCities.length : 1,
+            consumptionPercentage: totalAllocated > 0 ? (totalConsumptionToday / totalAllocated) * 100 : 0,
             topCityToday: topCity ? { name: topCity[0], amount: topCity[1] } : { name: 'N/A', amount: 0 },
             cityPerformance: Object.entries(consumptionByCity).sort((a, b) => b[1] - a[1])
         };
     }, [transactions, availableCities, selectedCity]);
-
-    // This chart logic now mirrors the UserDashboard, performing aggregation on the frontend
+    
+    // Chart Data Aggregation (Your original logic remains)
     const chartData = useMemo(() => {
+        // ... (Your original chart data logic is here) ...
         if (transactions.length === 0) return { labels: [], datasets: [] };
 
         const timeAggregatedData = {};
-        const citiesInDataset = [...new Set(transactions.map(t => t.city))].sort();
+        // Use availableCities to ensure consistent chart colors even if some data is missing
+        const citiesInDataset = availableCities.filter(c => c !== 'All Regions').sort(); 
         const now = new Date();
 
         transactions.forEach(t => {
@@ -80,113 +115,180 @@ function EmployeeDashboard() {
                 case 'weekly': key = format(startOfWeek(date, { weekStartsOn: 1 }), 'yyyy-ww'); break;
                 case 'monthly': key = format(date, 'yyyy-MM'); break;
                 case 'yearly': key = getYear(date).toString(); break;
-                default:
+                default: // Daily - showing last 7 days
                     if (date < subDays(now, 6)) return;
                     key = format(date, 'yyyy-MM-dd'); break;
             }
             if (!timeAggregatedData[key]) {
-                timeAggregatedData[key] = { date: date };
-                citiesInDataset.forEach(city => { timeAggregatedData[key][city] = 0; });
+                timeAggregatedData[key] = { date: date, ...Object.fromEntries(citiesInDataset.map(c => [c, 0])) };
             }
-            timeAggregatedData[key][t.city] += t.amount;
+            // Ensure data point is associated with a known city
+            if (t.city && citiesInDataset.includes(t.city)) {
+                 timeAggregatedData[key][t.city] = (timeAggregatedData[key][t.city] || 0) + t.amount;
+            }
         });
         
         const sortedData = Object.entries(timeAggregatedData).sort((a, b) => a[1].date - b[1].date);
+        
+        // This is complex multi-series data, simplify labels for clarity
         const labels = sortedData.map(([key, value]) => {
             switch (view) {
                 case 'weekly': return `Week ${getWeek(value.date, { weekStartsOn: 1 })}`;
                 case 'monthly': return format(value.date, 'MMM yyyy');
                 case 'yearly': return key;
-                default: return format(value.date, 'EEE, d MMM');
+                default: return format(value.date, 'MMM d');
             }
         });
 
+        // Generate consistent colors for cities
         const datasets = citiesInDataset.map((city, index) => ({
             label: city,
             data: sortedData.map(([key, value]) => value[city] || 0),
-            backgroundColor: `hsl(${(index * 360) / (citiesInDataset.length || 1)}, 70%, 60%)`,
+            backgroundColor: `hsl(${(index * 30 + 200) % 360}, 70%, 60%)`, // Use HSL for dynamic but distinct colors
         }));
 
         return { labels, datasets };
-    }, [transactions, view]);
+    }, [transactions, view, availableCities]);
 
     const chartOptions = {
-        plugins: { title: { display: true, text: `Water Consumption in ${employeeDetails?.state || ''}` } },
+        plugins: { 
+            title: { display: true, text: `Water Consumption Trends`, font: { size: 16, weight: 'bold' } },
+            legend: { position: 'bottom' }
+        },
         responsive: true,
-        scales: { x: { stacked: false }, y: { stacked: false, beginAtZero: true } },
+        maintainAspectRatio: false,
+        scales: { 
+            x: { stacked: true }, 
+            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Consumption (Liters)' } } 
+        },
     };
 
-    if (loading && !employeeDetails) return <div className="min-h-screen flex items-center justify-center font-semibold text-lg">Loading Employee Dashboard...</div>;
-    if (error) return <div className="min-h-screen flex items-center justify-center text-red-500 font-semibold p-4 text-center">{error}</div>;
+    if (loading && !employeeDetails) return <div className="min-h-screen flex items-center justify-center font-semibold text-lg">Loading Dashboard...</div>;
+    if (error) return <div className="min-h-screen flex items-center justify-center text-red-600 font-semibold p-4 text-center">{error}</div>;
+
+    const statsData = [
+        { 
+            title: "Total Allocated", 
+            value: `${dashboardMetrics.totalAllocated.toFixed(0)}L`, 
+            detail: `${dashboardMetrics.totalHouseholds} households`, 
+            Icon: Droplets, 
+            bgColor: 'bg-blue-100', 
+            textColor: 'text-blue-600' 
+        },
+        { 
+            title: "Total Consumed", 
+            value: `${dashboardMetrics.totalConsumptionToday.toFixed(0)}L`, 
+            detail: `${dashboardMetrics.consumptionPercentage.toFixed(0)}% of allocation`, 
+            Icon: TrendingUp, 
+            bgColor: 'bg-green-100', 
+            textColor: 'text-green-600' 
+        },
+        { 
+            title: "Total Remaining", 
+            value: `${dashboardMetrics.totalRemaining.toFixed(0)}L`, 
+            detail: "Available today", 
+            Icon: AlertTriangle, 
+            bgColor: 'bg-orange-100', 
+            textColor: 'text-orange-600' 
+        },
+        { 
+            title: "Active Households", 
+            value: `${dashboardMetrics.totalHouseholds}`, 
+            detail: "In selected region", 
+            Icon: Users, 
+            bgColor: 'bg-purple-100', 
+            textColor: 'text-purple-600' 
+        },
+    ];
 
     return (
-        <div className="min-h-screen bg-gray-100 p-4 sm:p-6 lg:p-8">
-            <div className="max-w-7xl mx-auto">
-                <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-800">Employee Dashboard</h1>
-                        <p className="text-gray-600 mt-1">
-                            Viewing data for: <strong className="text-indigo-600">{employeeDetails?.state}</strong> | Logged in as: <strong>{employeeId}</strong>
-                        </p>
-                    </div>
-                    <button onClick={logout} className="mt-4 sm:mt-0 px-4 py-2 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 transition">
-                        Logout
-                    </button>
-                </header>
+        <div className="min-h-screen bg-gray-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Government Dashboard</h1>
+                    <p className="text-gray-600">Monitor regional water distribution and household consumption</p>
+                </div>
+                
+                {/* Filters and Export */}
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mb-8">
+                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                            <div className="flex items-center space-x-2">
+                                <Filter className="h-5 w-5 text-gray-500" />
+                                <span className="text-sm font-medium text-gray-700">Filters:</span>
+                            </div>
+                            
+                            {/* Region Filter */}
+                            <div>
+                                <label htmlFor="region" className="block text-sm font-medium text-gray-700 mb-1">Region</label>
+                                <select 
+                                    id="region" 
+                                    value={selectedCity} 
+                                    onChange={(e) => setSelectedCity(e.target.value)} 
+                                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option value="all">All Regions</option>
+                                    {availableCities.map(r => <option key={r} value={r}>{r}</option>)}
+                                </select>
+                            </div>
 
-                <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white p-6 rounded-xl shadow-lg flex items-center space-x-4">
-                        <div className="bg-blue-100 p-3 rounded-full">💧</div>
-                        <div><p className="text-sm text-gray-500 font-medium">Today's Total Consumption</p><p className="text-2xl font-bold text-gray-800">{dashboardMetrics.totalConsumptionToday.toFixed(2)} L</p></div>
+                            {/* Date Filter */}
+                            <div>
+                                <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                <input 
+                                    type="date" 
+                                    id="date" 
+                                    value={selectedDate} 
+                                    onChange={(e) => setSelectedDate(e.target.value)} 
+                                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                                />
+                            </div>
+                        </div>
+                        
+                        <button className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center space-x-2">
+                            <Download className="h-4 w-4" />
+                            <span>Export Data</span>
+                        </button>
                     </div>
-                    <div className="bg-white p-6 rounded-xl shadow-lg flex items-center space-x-4">
-                        <div className="bg-purple-100 p-3 rounded-full">🏙️</div>
-                        <div><p className="text-sm text-gray-500 font-medium">Cities Monitored</p><p className="text-2xl font-bold text-gray-800">{dashboardMetrics.cityCount}</p></div>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-lg flex items-center space-x-4">
-                        <div className="bg-yellow-100 p-3 rounded-full">📈</div>
-                        <div><p className="text-sm text-gray-500 font-medium">Highest Consumption (Today)</p><p className="text-xl font-bold text-gray-800">{dashboardMetrics.topCityToday.name}</p></div>
-                    </div>
-                </section>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    {statsData.map((stat) => (
+                        <StatsCard key={stat.title} {...stat} />
+                    ))}
+                </div>
 
                 <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
-                        <h2 className="text-2xl font-bold text-gray-700 mb-4">Consumption History</h2>
-                        <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-2">
+                    {/* Regional Distribution Chart */}
+                    <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Regional Consumption Trend</h3>
+                        <div className="flex flex-wrap gap-2 mb-4">
                             {['daily', 'weekly', 'monthly', 'yearly'].map(v => (
-                                <button key={v} onClick={() => setView(v)} className={`px-4 py-1 text-sm font-medium rounded-md transition ${view === v ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                                <button key={v} onClick={() => setView(v)} className={`px-4 py-1 text-sm font-medium rounded-md transition ${view === v ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
                                     {v.charAt(0).toUpperCase() + v.slice(1)}
                                 </button>
                             ))}
-                            <div className="h-6 w-px bg-gray-300 mx-2"></div>
-                            <select
-                                value={selectedCity}
-                                onChange={(e) => setSelectedCity(e.target.value)}
-                                disabled={loading}
-                                className="px-4 py-1 text-sm font-medium rounded-md transition bg-gray-200 text-gray-700 hover:bg-gray-300 border-transparent focus:border-indigo-500 focus:ring-indigo-500 disabled:opacity-50"
-                            >
-                                <option value="all">All Cities</option>
-                                {availableCities.map(city => (
-                                    <option key={city} value={city}>{city}</option>
-                                ))}
-                            </select>
                         </div>
-                        <Bar options={chartOptions} data={chartData} />
+                        <div className="h-96">
+                            <Bar options={chartOptions} data={chartData} /> 
+                        </div>
                     </div>
-
-                    <div className="lg:col-span-1 space-y-8">
-                        <div className="bg-white p-6 rounded-xl shadow-lg">
-                            <h2 className="text-2xl font-bold text-gray-700 mb-4">City Performance (Today)</h2>
-                            <div className="space-y-4 max-h-96 overflow-y-auto">
-                                {dashboardMetrics.cityPerformance.length > 0 ? (
-                                    dashboardMetrics.cityPerformance.map(([city, amount]) => (
-                                        <div key={city} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                            <p className="font-semibold text-gray-800">{city}</p>
-                                            <p className="font-bold text-indigo-600">{amount.toFixed(2)} L</p>
-                                        </div>
-                                    ))
-                                ) : (<p className="text-gray-500 text-center">No consumption data for today.</p>)}
-                            </div>
+                    
+                    {/* City Performance List */}
+                    <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <h2 className="text-xl font-semibold text-gray-900 mb-4">City Performance (Today)</h2>
+                        <div className="space-y-4 max-h-96 overflow-y-auto">
+                            {dashboardMetrics.cityPerformance.length > 0 ? (
+                                dashboardMetrics.cityPerformance.map(([city, amount]) => (
+                                    <div key={city} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                        <p className="font-semibold text-gray-800">{city}</p>
+                                        <p className="font-bold text-blue-600">{amount.toFixed(2)} L</p>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-gray-500 text-center">No consumption data for today.</p>
+                            )}
                         </div>
                     </div>
                 </main>
@@ -196,4 +298,3 @@ function EmployeeDashboard() {
 }
 
 export default EmployeeDashboard;
-

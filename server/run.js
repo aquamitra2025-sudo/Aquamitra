@@ -19,7 +19,7 @@ mongoose.connect("mongodb+srv://vishveshbece:Vishvesh%402005@cluster0.fwpiw.mong
 
 const userSchema = new mongoose.Schema({
     userid: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
+    password: { type: String, required: true }, 
     threshold: { type: Number, default: 0 }
 });
 
@@ -303,4 +303,5 @@ app.get('/api/complaints/:userid', async (req, res) => {
 
 // --- 🚀 SERVER START ---
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
