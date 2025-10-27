@@ -7,7 +7,7 @@ const app = express();
 
 // Configuration
 // **SECURITY WARNING**: In a production environment, it's safer to use an environment variable for the origin.
-app.use(cors({ origin: "http://localhost:5173" })); 
+app.use(cors({ origin: ["http://localhost:5173","https://aquamitra-ten.vercel.app"]})); 
 app.use(express.json());
 
 // --- ⚙️ MONGOOSE SETUP ---
