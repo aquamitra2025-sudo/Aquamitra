@@ -1,23 +1,36 @@
+// src/components/EmployeeDashboard.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import useAuth from '../hooks/useauth';
 import axios from 'axios';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { format, subDays, startOfWeek, getWeek, getYear, isToday } from 'date-fns';
-import { Droplets, TrendingUp, AlertTriangle, Users, Download, Filter } from 'lucide-react'; // Lucide icons
+import { TrendingUp, AlertTriangle, Users, Download, Filter } from 'lucide-react'; 
+import logoPath from '../assets/logo.png'; // <--- ADDED IMPORT
+
+// --- Custom Logo Component (Icon Size) ---
+const CustomLogoIcon = ({ className }) => (
+    <div className={`font-bold text-lg text-center ${className}`}>
+        {/* Use the imported path */}
+        <img src={logoPath} alt="Aquamitra Logo" className="h-full w-full object-contain"/>
+    </div>
+);
+// --- End Custom Logo Component ---
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 // Component for the dashboard statistics cards
 const StatsCard = ({ title, value, detail, Icon, bgColor, textColor }) => (
-    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+    // THEME: Dark card background, glowing border effect
+    <div className="bg-gray-800 rounded-xl p-6 shadow-xl border border-blue-900 transition-all duration-300 hover:border-cyan-500/50">
         <div className="flex items-center justify-between">
             <div>
-                <p className="text-sm font-medium text-gray-600">{title}</p>
+                <p className="text-sm font-medium text-gray-400">{title}</p>
                 <p className={`text-2xl font-bold ${textColor}`}>{value}</p>
                 <p className="text-sm text-gray-500">{detail}</p>
             </div>
-            <div className={`w-12 h-12 ${bgColor} rounded-lg flex items-center justify-center`}>
+            // THEME: Deep-water blue for icon wrapper
+            <div className={`w-12 h-12 ${bgColor} rounded-full flex items-center justify-center shadow-md`}>
                 <Icon className={`h-6 w-6 ${textColor}`} />
             </div>
         </div>
@@ -36,6 +49,7 @@ function EmployeeDashboard() {
     const [selectedCity, setSelectedCity] = useState('all');
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
+    // ... (rest of the component logic remains the same)
 
     useEffect(() => {
         if (!employeeId) return;
@@ -45,7 +59,7 @@ function EmployeeDashboard() {
                 setLoading(true);
                 setError(null);
                 
-                // NOTE: Passing selectedCity for filtering API results
+                // --- MODIFIED LINE ---
                 const response = await axios.get(`https://aquamitra-1.onrender.com/api/employee/dashboard/${employeeId}`, {
                     params: { city: selectedCity, date: selectedDate }
                 });
@@ -53,12 +67,10 @@ function EmployeeDashboard() {
                 setEmployeeDetails(response.data.employeeDetails);
                 setTransactions(response.data.transactions);
                 
-                // Assuming your API returns a clean list of available cities/regions
                 if (response.data.cities) {
                     setAvailableCities(response.data.cities);
                 } else {
-                    // Placeholder regions if API doesn't return them or for initial load
-                    setAvailableCities(["Pallavaram", "Tambaram", "Poonamalle", "Avadi", "Mangadu", "Kundrathur", "Thiruverkadu", "Thiruninravur", "Maraimalai Nagar", "Chengalpattu"]);
+                    setAvailableCities(["Central Reservoir", "Northern Zone", "Southern Zone", "Industrial Hub", "Rural Outskirts"]);
                 }
 
             } catch (err) {
@@ -69,28 +81,25 @@ function EmployeeDashboard() {
         };
 
         fetchData();
-    }, [employeeId, selectedCity, selectedDate]); // Dependency on selectedDate/City triggers re-fetch
+    }, [employeeId, selectedCity, selectedDate]);
 
-    // Calculate high-level metrics for the cards at the top (Your original logic remains)
     const dashboardMetrics = useMemo(() => {
         const todaysTransactions = transactions.filter(t => isToday(new Date(t.timestamp)));
         const totalConsumptionToday = todaysTransactions.reduce((acc, curr) => acc + curr.amount, 0);
-
         const consumptionByCity = todaysTransactions.reduce((acc, curr) => {
-            acc[curr.city] = (acc[curr.city] || 0) + curr.amount;
+            const city = curr.city || 'Unassigned'; 
+            acc[city] = (acc[city] || 0) + curr.amount;
             return acc;
         }, {});
-
-        const totalAllocated = transactions.reduce((acc, curr) => acc + (curr.allocated || 0), 0); // Assuming allocated data is in transactions
+        const totalAllocated = transactions.reduce((acc, curr) => acc + (curr.allocated || 500), 0); 
         const totalRemaining = totalAllocated - totalConsumptionToday;
-        
         const topCity = Object.entries(consumptionByCity).sort((a, b) => b[1] - a[1])[0];
 
         return {
             totalAllocated,
             totalConsumptionToday,
             totalRemaining,
-            totalHouseholds: transactions.length, // Simplified count
+            totalHouseholds: new Set(transactions.map(t => t.householdId || t.userid)).size, 
             cityCount: selectedCity === 'all' ? availableCities.length : 1,
             consumptionPercentage: totalAllocated > 0 ? (totalConsumptionToday / totalAllocated) * 100 : 0,
             topCityToday: topCity ? { name: topCity[0], amount: topCity[1] } : { name: 'N/A', amount: 0 },
@@ -98,14 +107,10 @@ function EmployeeDashboard() {
         };
     }, [transactions, availableCities, selectedCity]);
     
-    // Chart Data Aggregation (Your original logic remains)
     const chartData = useMemo(() => {
-        // ... (Your original chart data logic is here) ...
         if (transactions.length === 0) return { labels: [], datasets: [] };
-
         const timeAggregatedData = {};
-        // Use availableCities to ensure consistent chart colors even if some data is missing
-        const citiesInDataset = availableCities.filter(c => c !== 'All Regions').sort(); 
+        const allCitiesInChart = [...new Set([...availableCities, ...transactions.map(t => t.city || 'Unassigned')])].filter(c => c !== 'all').sort();
         const now = new Date();
 
         transactions.forEach(t => {
@@ -115,22 +120,21 @@ function EmployeeDashboard() {
                 case 'weekly': key = format(startOfWeek(date, { weekStartsOn: 1 }), 'yyyy-ww'); break;
                 case 'monthly': key = format(date, 'yyyy-MM'); break;
                 case 'yearly': key = getYear(date).toString(); break;
-                default: // Daily - showing last 7 days
+                default: 
                     if (date < subDays(now, 6)) return;
                     key = format(date, 'yyyy-MM-dd'); break;
             }
             if (!timeAggregatedData[key]) {
-                timeAggregatedData[key] = { date: date, ...Object.fromEntries(citiesInDataset.map(c => [c, 0])) };
+                timeAggregatedData[key] = { date: date, ...Object.fromEntries(allCitiesInChart.map(c => [c, 0])) };
             }
-            // Ensure data point is associated with a known city
-            if (t.city && citiesInDataset.includes(t.city)) {
-                 timeAggregatedData[key][t.city] = (timeAggregatedData[key][t.city] || 0) + t.amount;
+            const city = t.city || 'Unassigned';
+            if (allCitiesInChart.includes(city)) {
+                   timeAggregatedData[key][city] = (timeAggregatedData[key][city] || 0) + t.amount;
             }
         });
         
         const sortedData = Object.entries(timeAggregatedData).sort((a, b) => a[1].date - b[1].date);
         
-        // This is complex multi-series data, simplify labels for clarity
         const labels = sortedData.map(([key, value]) => {
             switch (view) {
                 case 'weekly': return `Week ${getWeek(value.date, { weekStartsOn: 1 })}`;
@@ -140,11 +144,11 @@ function EmployeeDashboard() {
             }
         });
 
-        // Generate consistent colors for cities
-        const datasets = citiesInDataset.map((city, index) => ({
+        const datasets = allCitiesInChart.map((city, index) => ({
             label: city,
             data: sortedData.map(([key, value]) => value[city] || 0),
-            backgroundColor: `hsl(${(index * 30 + 200) % 360}, 70%, 60%)`, // Use HSL for dynamic but distinct colors
+            backgroundColor: `hsl(${(index * 35 + 200) % 360}, 70%, 50%)`, 
+            borderColor: `hsl(${(index * 35 + 200) % 360}, 80%, 70%)`,
         }));
 
         return { labels, datasets };
@@ -152,80 +156,91 @@ function EmployeeDashboard() {
 
     const chartOptions = {
         plugins: { 
-            title: { display: true, text: `Water Consumption Trends`, font: { size: 16, weight: 'bold' } },
-            legend: { position: 'bottom' }
+            title: { display: true, text: `Regional Water Consumption Trends`, font: { size: 18, weight: 'bold' }, color: '#E5E7EB' }, 
+            legend: { position: 'bottom', labels: { color: '#9CA3AF' } } 
         },
         responsive: true,
         maintainAspectRatio: false,
         scales: { 
-            x: { stacked: true }, 
-            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Consumption (Liters)' } } 
+            x: { 
+                stacked: true, 
+                grid: { display: false },
+                ticks: { color: '#9CA3AF' } 
+            }, 
+            y: { 
+                stacked: true, 
+                beginAtZero: true, 
+                title: { display: true, text: 'Consumption (Liters)', color: '#06B6D4' }, 
+                grid: { color: 'rgba(55, 65, 81, 0.5)' }, 
+                ticks: { color: '#9CA3AF' } 
+            } 
         },
     };
 
-    if (loading && !employeeDetails) return <div className="min-h-screen flex items-center justify-center font-semibold text-lg">Loading Dashboard...</div>;
-    if (error) return <div className="min-h-screen flex items-center justify-center text-red-600 font-semibold p-4 text-center">{error}</div>;
+    if (loading && !employeeDetails) return <div className="min-h-screen flex items-center justify-center font-semibold text-lg text-white">Loading Dashboard...</div>;
+    if (error) return <div className="min-h-screen flex items-center justify-center text-red-400 font-semibold p-4 text-center">{error}</div>;
 
     const statsData = [
         { 
-            title: "Total Allocated", 
+            title: "Total Allocation", 
             value: `${dashboardMetrics.totalAllocated.toFixed(0)}L`, 
-            detail: `${dashboardMetrics.totalHouseholds} households`, 
-            Icon: Droplets, 
-            bgColor: 'bg-blue-100', 
-            textColor: 'text-blue-600' 
+            detail: `Across ${dashboardMetrics.totalHouseholds} accounts`, 
+            Icon: CustomLogoIcon,
+            bgColor: 'bg-blue-600/20', 
+            textColor: 'text-blue-400' 
         },
         { 
-            title: "Total Consumed", 
+            title: "Today's Consumption", 
             value: `${dashboardMetrics.totalConsumptionToday.toFixed(0)}L`, 
-            detail: `${dashboardMetrics.consumptionPercentage.toFixed(0)}% of allocation`, 
+            detail: `${dashboardMetrics.consumptionPercentage.toFixed(1)}% of total allocation`, 
             Icon: TrendingUp, 
-            bgColor: 'bg-green-100', 
-            textColor: 'text-green-600' 
+            bgColor: 'bg-cyan-600/20', 
+            textColor: 'text-cyan-400' 
         },
         { 
-            title: "Total Remaining", 
+            title: "Remaining Reserve", 
             value: `${dashboardMetrics.totalRemaining.toFixed(0)}L`, 
-            detail: "Available today", 
+            detail: "Today's available capacity", 
             Icon: AlertTriangle, 
-            bgColor: 'bg-orange-100', 
-            textColor: 'text-orange-600' 
+            bgColor: 'bg-fuchsia-600/20', 
+            textColor: 'text-fuchsia-400' 
         },
         { 
-            title: "Active Households", 
-            value: `${dashboardMetrics.totalHouseholds}`, 
-            detail: "In selected region", 
+            title: "Managed Regions", 
+            value: `${dashboardMetrics.cityCount}`, 
             Icon: Users, 
-            bgColor: 'bg-purple-100', 
-            textColor: 'text-purple-600' 
+            bgColor: 'bg-indigo-600/20', 
+            textColor: 'text-indigo-400' 
         },
     ];
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        // THEME: Background to deep indigo/blue gradient
+        <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-gray-900 to-blue-950 text-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Government Dashboard</h1>
-                    <p className="text-gray-600">Monitor regional water distribution and household consumption</p>
+                    <h1 className="text-3xl font-bold text-white mb-2 border-b-2 border-cyan-500 pb-1 inline-block">Government Water Oversight 🌊</h1>
+                    <p className="text-gray-400">Monitor regional water distribution and household consumption for informed policy making</p>
                 </div>
                 
                 {/* Filters and Export */}
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mb-8">
+                <div className="bg-gray-800 rounded-xl p-6 shadow-xl border border-blue-900 mb-8">
                     <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                             <div className="flex items-center space-x-2">
-                                <Filter className="h-5 w-5 text-gray-500" />
-                                <span className="text-sm font-medium text-gray-700">Filters:</span>
+                                <Filter className="h-5 w-5 text-cyan-500" />
+                                <span className="text-sm font-medium text-gray-300">Filter View:</span>
                             </div>
                             
                             {/* Region Filter */}
                             <div>
-                                <label htmlFor="region" className="block text-sm font-medium text-gray-700 mb-1">Region</label>
+                                <label htmlFor="region" className="sr-only">Region</label>
                                 <select 
                                     id="region" 
                                     value={selectedCity} 
                                     onChange={(e) => setSelectedCity(e.target.value)} 
-                                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    // THEME: Dark input field, Cyan focus ring
+                                    className="px-3 py-2 border border-blue-700 bg-gray-900 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
                                 >
                                     <option value="all">All Regions</option>
                                     {availableCities.map(r => <option key={r} value={r}>{r}</option>)}
@@ -234,18 +249,20 @@ function EmployeeDashboard() {
 
                             {/* Date Filter */}
                             <div>
-                                <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                <label htmlFor="date" className="sr-only">Date</label>
                                 <input 
                                     type="date" 
                                     id="date" 
                                     value={selectedDate} 
                                     onChange={(e) => setSelectedDate(e.target.value)} 
-                                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                                    // THEME: Dark input field, Cyan focus ring
+                                    className="px-3 py-2 border border-blue-700 bg-gray-900 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" 
                                 />
                             </div>
                         </div>
                         
-                        <button className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center space-x-2">
+                        {/* THEME: Export button to electric cyan (primary action) */}
+                        <button className="bg-cyan-600 hover:bg-cyan-500 text-gray-900 px-4 py-2 rounded-md font-medium transition-colors flex items-center space-x-2 shadow-lg hover:shadow-cyan-500/50">
                             <Download className="h-4 w-4" />
                             <span>Export Data</span>
                         </button>
@@ -261,33 +278,45 @@ function EmployeeDashboard() {
 
                 <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Regional Distribution Chart */}
-                    <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Regional Consumption Trend</h3>
+                    <div className="lg:col-span-2 bg-gray-800 rounded-xl p-6 shadow-xl border border-blue-900">
+                        <h3 className="text-xl font-semibold text-white mb-4 border-b pb-2 border-gray-700">Regional Consumption Trend</h3>
                         <div className="flex flex-wrap gap-2 mb-4">
                             {['daily', 'weekly', 'monthly', 'yearly'].map(v => (
-                                <button key={v} onClick={() => setView(v)} className={`px-4 py-1 text-sm font-medium rounded-md transition ${view === v ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                                <button 
+                                    key={v} 
+                                    onClick={() => setView(v)} 
+                                    // THEME: Trend button to use vibrant electric blue
+                                    className={`px-4 py-1 text-sm font-medium rounded-full transition ${view === v ? 'bg-cyan-600 text-gray-900 shadow-md' : 'bg-gray-700 text-cyan-400 hover:bg-cyan-900'}`}
+                                >
                                     {v.charAt(0).toUpperCase() + v.slice(1)}
                                 </button>
                             ))}
                         </div>
-                        <div className="h-96">
-                            <Bar options={chartOptions} data={chartData} /> 
+                        <div className="h-96 w-full">
+                            {chartData.labels.length > 0 ? (
+                                <Bar options={chartOptions} data={chartData} /> 
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-gray-500">
+                                    <p>No historical transaction data available for this view.</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                     
                     {/* City Performance List */}
-                    <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <h2 className="text-xl font-semibold text-gray-900 mb-4">City Performance (Today)</h2>
+                    <div className="lg:col-span-1 bg-gray-800 p-6 rounded-xl shadow-xl border border-blue-900">
+                        <h2 className="text-xl font-semibold text-white mb-4 border-b pb-2 border-gray-700">Region Performance (Today)</h2>
                         <div className="space-y-4 max-h-96 overflow-y-auto">
                             {dashboardMetrics.cityPerformance.length > 0 ? (
                                 dashboardMetrics.cityPerformance.map(([city, amount]) => (
-                                    <div key={city} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                        <p className="font-semibold text-gray-800">{city}</p>
-                                        <p className="font-bold text-blue-600">{amount.toFixed(2)} L</p>
+                                    <div key={city} className="flex justify-between items-center p-3 bg-blue-900 rounded-lg border border-cyan-900">
+                                        <p className="font-semibold text-gray-300">{city}</p>
+                                        {/* THEME: Consumption amount color to electric cyan */}
+                                        <p className="font-bold text-cyan-400">{amount.toFixed(2)} L</p>
                                     </div>
                                 ))
                             ) : (
-                                <p className="text-gray-500 text-center">No consumption data for today.</p>
+                                <p className="text-gray-500 text-center py-8">No consumption data for the current date/filters.</p>
                             )}
                         </div>
                     </div>

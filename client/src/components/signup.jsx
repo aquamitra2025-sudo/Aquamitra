@@ -1,15 +1,22 @@
+// src/components/SignupPage.jsx
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
-import { Droplets, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle } from 'lucide-react'; 
+import logoPath from '../assets/logo.png'; // <--- ADDED IMPORT
+
+// --- Custom Logo Component (Signup Size) ---
+const CustomLogo = ({ className }) => (
+    // Use the imported path
+    <img src={logoPath} alt="Aquamitra Logo" className={`h-12 w-12 ${className} drop-shadow-lg object-contain`} />
+);
+// --- End Custom Logo Component ---
 
 function SignupPage() {
     const [userid, setUserid] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    // Removed: const [name, setName] = useState(""); 
     
-    // 'user' maps to Household/Public, 'employee' maps to Government/Municipal
     const [role, setRole] = useState("user"); 
     
     const [loading, setLoading] = useState(false);
@@ -21,7 +28,7 @@ function SignupPage() {
     
     const roleMap = { user: 'Household / Public', employee: 'Government / Municipal' };
     const roleApiEndpoint = { user: 'users', employee: 'employees' };
-    // NOTE: Use your Render URL
+    // --- MODIFIED LINE ---
     const API_BASE_URL = "https://aquamitra-1.onrender.com"; 
 
     const handleSignup = async (e) => {
@@ -46,44 +53,44 @@ function SignupPage() {
             const endpoint = roleApiEndpoint[role];
             const url = `${API_BASE_URL}/api/${endpoint}/signup`;
             
-            // Send only userid and password
             await axios.post(url, { userid, password }); 
             
-            setSuccess("Account created successfully! Redirecting to login...");
-            setTimeout(() => navigate("/login"), 2500); // Navigate to /login
+            setSuccess("Hydro-Profile successfully created! Redirecting to login...");
+            setTimeout(() => navigate("/login"), 2500);
 
         } catch (err) {
             setLoading(false);
             if (err.response) {
-                // Use a more generic message as the backend determines if the ID is valid/pre-registered
-                setError(err.response.data.message || "Registration failed. Check if your ID is valid.");
+                setError(err.response.data.message || "Registration failed. Please verify your ID and try again.");
             } else {
                 setError("Network error. Please check your connection.");
             }
         }
     };
 
-    const buttonText = loading ? "Processing..." : "Create account";
+    const buttonText = loading ? "Initializing..." : "Create Hydro-Profile";
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        // THEME: Deep space/water background gradient for depth and contrast
+        <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-gray-900 to-blue-950 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 text-white">
             <div className="max-w-md w-full space-y-8">
                 <div className="text-center">
-                    <Link to="/" className="inline-flex items-center space-x-2 mb-8">
-                        <Droplets className="h-10 w-10 text-blue-600" />
-                        <span className="text-2xl font-bold text-gray-900">Aquamitra</span>
+                    <Link to="/" className="inline-flex items-center space-x-3 mb-8">
+                        {/* Rendered Custom Logo */}
+                        <CustomLogo />
+                        <span className="text-3xl font-extrabold text-white">Aquamitra</span>
                     </Link>
-                    <h2 className="text-3xl font-bold text-gray-900 mb-2">Create your account</h2>
-                    <p className="text-gray-600">Join the water management revolution</p>
+                    <h2 className="text-3xl font-bold text-white mb-2">Secure Your Hydro-Profile</h2>
+                    <p className="text-indigo-300">Join the movement for smarter water management.</p>
                 </div>
 
-                <div className="bg-white py-8 px-6 shadow-xl rounded-2xl border border-gray-100">
+                {/* THEME: Form container uses dark, transparent glass effect */}
+                <div className="bg-gray-800/70 backdrop-blur-sm py-8 px-6 shadow-2xl rounded-2xl border border-cyan-800">
                     <form onSubmit={handleSignup} className="space-y-6">
-                        {/* Removed: Full Name Input */}
-
+                        
                         {/* User ID Input */}
                         <div>
-                            <label htmlFor="userid" className="block text-sm font-medium text-gray-700 mb-2">User ID / Email Address</label>
+                            <label htmlFor="userid" className="block text-sm font-bold text-gray-300 mb-2">User ID / Email Address</label>
                             <input
                                 id="userid"
                                 name="userid"
@@ -91,14 +98,15 @@ function SignupPage() {
                                 required
                                 value={userid}
                                 onChange={(e) => setUserid(e.target.value)}
-                                className="appearance-none relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm transition-colors"
+                                // THEME: Focus ring to Cyan
+                                className="appearance-none relative block w-full px-4 py-3 border border-indigo-700 bg-gray-900 text-white placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 focus:z-10 sm:text-sm transition-colors shadow-inner"
                                 placeholder={role === 'user' ? "Enter your pre-registered User ID" : "Enter your Employee ID"}
                             />
                         </div>
 
                         {/* Password Input */}
                         <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                            <label htmlFor="password" className="block text-sm font-bold text-gray-300 mb-2">Password</label>
                             <div className="relative">
                                 <input
                                     id="password"
@@ -108,8 +116,9 @@ function SignupPage() {
                                     required
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="appearance-none relative block w-full px-4 py-3 pr-12 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm transition-colors"
-                                    placeholder="Create a password"
+                                    // THEME: Focus ring to Cyan
+                                    className="appearance-none relative block w-full px-4 py-3 pr-12 border border-indigo-700 bg-gray-900 text-white placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 focus:z-10 sm:text-sm transition-colors shadow-inner"
+                                    placeholder="Create a strong password"
                                 />
                                 <button
                                     type="button"
@@ -117,18 +126,18 @@ function SignupPage() {
                                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                                 >
                                     {isPasswordVisible ? (
-                                        <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                                        <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-300" />
                                     ) : (
-                                        <Eye className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                                        <Eye className="h-5 w-5 text-gray-400 hover:text-gray-300" />
                                     )}
                                 </button>
                             </div>
-                            <p className="mt-1 text-xs text-gray-500">Must be at least 6 characters long</p>
+                            <p className="mt-1 text-xs text-gray-400">Password must be at least 6 characters long.</p>
                         </div>
                         
                         {/* Confirm Password Input */}
                         <div>
-                            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                            <label htmlFor="confirmPassword" className="block text-sm font-bold text-gray-300 mb-2">Confirm Password</label>
                             <input
                                 id="confirmPassword"
                                 name="confirmPassword"
@@ -136,7 +145,8 @@ function SignupPage() {
                                 required
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="appearance-none relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm transition-colors"
+                                // THEME: Focus ring to Cyan
+                                className="appearance-none relative block w-full px-4 py-3 border border-indigo-700 bg-gray-900 text-white placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 focus:z-10 sm:text-sm transition-colors shadow-inner"
                                 placeholder="Confirm your password"
                             />
                         </div>
@@ -144,44 +154,48 @@ function SignupPage() {
 
                         {/* Role Selector */}
                         <div>
-                            <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">Account type</label>
+                            <label htmlFor="role" className="block text-sm font-bold text-gray-300 mb-2">Account Type</label>
                             <select
                                 id="role"
                                 value={role}
                                 onChange={(e) => setRole(e.target.value)}
-                                className="appearance-none relative block w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors bg-white"
+                                // THEME: Focus ring to Cyan
+                                className="appearance-none relative block w-full px-4 py-3 border border-indigo-700 bg-gray-900 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm transition-colors shadow-inner"
                             >
-                                <option value="user">{roleMap['user']}</option>
-                                <option value="employee">{roleMap['employee']}</option>
+                                <option value="user">Household / Public (Surface)</option>
+                                <option value="employee">Government / Municipal (Deep)</option>
                             </select>
-                            <div className="mt-2 text-xs text-gray-500">
+                            <div className="mt-2 text-xs text-gray-400">
                                 <div className="flex items-start space-x-2">
-                                    <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
-                                    <span>{role === 'user' ? 'Track your household water usage and submit complaints' : 'Gain access to regional water management data'}</span>
+                                    {/* THEME: Check icon color to Cyan */}
+                                    <CheckCircle className="h-4 w-4 text-cyan-500 mt-0.5" />
+                                    <span>{role === 'user' ? 'Track your household consumption and submit complaints.' : 'Gain network oversight and policy analysis tools.'}</span>
                                 </div>
                             </div>
                         </div>
 
-                        {error && <p className="text-sm text-red-600 text-center font-medium">{error}</p>}
-                        {success && <p className="text-sm text-green-600 text-center font-medium">{success}</p>}
+                        {error && <p className="text-sm text-red-400 text-center font-bold">{error}</p>}
+                        {success && <p className="text-sm text-green-400 text-center font-bold">{success}</p>}
 
                         {/* Submit Button */}
                         <div>
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                // THEME: Primary button: Electric Cyan for action
+                                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-lg font-extrabold rounded-lg text-gray-900 bg-cyan-500 hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-cyan-500/30"
                             >
                                 {buttonText}
                             </button>
                         </div>
 
                         {/* Link to Login */}
-                        <div className="text-center">
-                            <p className="text-sm text-gray-600">
-                                Already have an account?{' '}
-                                <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
-                                    Sign in here
+                        <div className="text-center pt-2">
+                            <p className="text-sm text-gray-400">
+                                Already registered?{' '}
+                                {/* THEME: Link color to bright cyan */}
+                                <Link to="/login" className="font-bold text-cyan-400 hover:text-cyan-300 transition-colors">
+                                    Sign In to your account
                                 </Link>
                             </p>
                         </div>
