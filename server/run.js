@@ -4,10 +4,11 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
-const moment = require('moment-timezone');
+const moment = require('moment-timezone'); // Used for timezone-aware calculations
 const app = express();
-// Ensure you use the correct frontend origin
-app.use(cors({ origin: "https://aquamitra-ten.vercel.app" })); 
+
+// Configuration
+app.use(cors({ origin: "https://aquamitra-ten.vercel.app" })); // Adjust if your frontend URL changes
 app.use(express.json());
 
 
@@ -42,7 +43,7 @@ const employeeSchema = new mongoose.Schema({
 const transactionSchema = new mongoose.Schema({
     userId: {type: String, required: true, index: true},
     amount: Number,
-    timestamp: { type: Date, default: Date.now }
+    timestamp: { type: Date, default: Date.now } // MongoDB stores this in UTC
 });
 
 const complaintSchema = new mongoose.Schema({
@@ -59,7 +60,11 @@ const Transaction = mongoose.model('transaction', transactionSchema);
 const Complaint = mongoose.model('complaint', complaintSchema);
 
 
-// --- 🔥 API ROUTES: AUTH & SENSOR ---
+// ===================================
+//            🔥 API ROUTES
+// ===================================
+
+// --- AUTHENTICATION ---
 
 app.post("/api/users/signup", async (req, res) => {
     const { userid, password } = req.body;
@@ -84,7 +89,6 @@ app.post("/api/employees/signup", async (req, res) => {
     const { userid, password } = req.body;
     if (!userid || !password) { return res.status(400).json({ message: "All fields are required." }); }
     try {
-        // Find by primary key (userid in mongoose)
         const employee = await Employee.findOne({ userid });
         if (!employee) { return res.status(404).json({ message: "This Employee ID has not been pre-registered." }); }
         if (employee.password !== null) { return res.status(400).json({ message: "This account's password has already been configured." }); }
@@ -117,7 +121,6 @@ app.post('/api/employees/login', async (req, res) => {
     const { userid, password } = req.body;
     try {
         const employee = await Employee.findOne({ userid });
-        // Check for existence and if password has been set
         if (!employee || !employee.password) { return res.status(401).json({ message: 'Invalid credentials or account not yet set up.' }); }
         const isMatch = await bcrypt.compare(password, employee.password);
         if (!isMatch) { return res.status(401).json({ message: 'Invalid credentials.' }); }
@@ -128,8 +131,11 @@ app.post('/api/employees/login', async (req, res) => {
     }
 });
 
+// --- SENSOR DATA RECEIPT ---
+
 app.post('/api/sensordata', async (req, res) => {
-    const { userid, DO, Temp } = req.body;
+    const { userid, DO, Temp } = req.body; // DO is water consumption (Dissolved Oxygen is irrelevant here)
+
     if (!userid || !DO) {
         return res.status(400).json({ message: "Missing required fields: userid and DO are required." });
     }
@@ -155,24 +161,26 @@ app.post('/api/sensordata', async (req, res) => {
     }
 });
 
-// --- 📊 DASHBOARD & DATA ROUTES ---
+// ===================================
+//       📊 DASHBOARD & DATA ROUTES
+// ===================================
 
 app.get('/api/dashboard/:userid', async (req, res) => {
     try {
         const { userid } = req.params;
         const userTimeZone = req.headers['timezone'] || 'Asia/Kolkata'; 
-        const nowMoment = moment.tz(userTimeZone);
+        const nowMoment = moment.tz(userTimeZone); // Current time in user's timezone
 
         const user = await User.findOne({ userid });
         if (!user) { return res.status(404).json({ message: 'User not found' }); }
         
         const publicUser = await Public.findOne({ userid });
-        // Use 4 as a fallback headcount if data is missing, matching the Sequelize logic
+        // Use 4 as a fallback headcount if data is missing
         const headCount = publicUser ? (publicUser.headcout || 4) : 4; 
         
         const dailyThreshold = 55 * headCount; 
         
-        // --- 1. Calculate Today's Consumption (FIXED LOGIC for MongoDB) ---
+        // --- 1. Calculate Today's Consumption (Timezone-Aware) ---
         // Get the UTC equivalent of the start of TODAY in the user's timezone.
         const todayStartUTC = nowMoment.clone().startOf('day').toDate();
         
@@ -180,7 +188,7 @@ app.get('/api/dashboard/:userid', async (req, res) => {
             { 
                 $match: { 
                     userId: userid, 
-                    timestamp: { $gte: todayStartUTC } // Filter by UTC time from the start of the local day
+                    timestamp: { $gte: todayStartUTC } // Filter based on UTC time >= local start of day
                 } 
             },
             { 
@@ -193,7 +201,7 @@ app.get('/api/dashboard/:userid', async (req, res) => {
 
         const todaysConsumption = todayConsumptionResult.length > 0 ? todayConsumptionResult[0].totalConsumption : 0;
         
-        // --- 2. Calculate Month-to-Date (FIXED LOGIC for MongoDB) ---
+        // --- 2. Calculate Month-to-Date (Timezone-Aware) ---
         // Get the UTC equivalent of the 1st day of the current month in the user's timezone
         const monthStartUTC = nowMoment.clone().startOf('month').toDate();
         
@@ -214,18 +222,23 @@ app.get('/api/dashboard/:userid', async (req, res) => {
 
         const totalMonthToDate = monthConsumptionResult.length > 0 ? monthConsumptionResult[0].totalMonthToDate : 0;
         
-        const daysPassed = nowMoment.date(); 
+        const daysPassed = nowMoment.date(); // Current day of the month (1-31)
         const averageDailyConsumption = totalMonthToDate / daysPassed;
 
         // --- 3. Fetch and Format Transactions & Complaints ---
         
         const rawTransactions = await Transaction.find({ userId: userid }).sort({ timestamp: -1 }).lean();
         
-        // Reformat the DB's ISO date string back to the custom format expected by the frontend
-        const formattedTransactions = rawTransactions.map(t => ({
-            ...t,
-            timestamp: moment.tz(t.timestamp, userTimeZone).format('DD-MM-YYYY HH:mm:ss')
-        }));
+        // Reformat the DB's ISO date (Date Object) back to the custom format expected by the frontend
+        const formattedTransactions = rawTransactions.map(t => {
+            // t.timestamp is a Date object, moment.tz handles this correctly without a format string
+            const momentObject = moment.tz(t.timestamp, userTimeZone);
+            return {
+                ...t,
+                // Apply the desired frontend format
+                timestamp: momentObject.format('DD-MM-YYYY HH:mm:ss')
+            };
+        });
         
         const allComplaints = await Complaint.find({ userId: userid }).sort({ createdAt: -1 });
         
@@ -257,6 +270,7 @@ app.get('/api/employee/dashboard/:employeeId', async (req, res) => {
             return res.status(404).json({ message: 'Employee not found or state/country not assigned.' });
         }
         
+        // Build the filter for the Publics collection
         const publicLocationMatch = {
             Country: employee.country,
             State: employee.state
@@ -278,7 +292,8 @@ app.get('/api/employee/dashboard/:employeeId', async (req, res) => {
         }
         
         // 2. Fetch transactions for all filtered user IDs
-        const allTransactions = await Transaction.find({ userId: { $in: userIdsFromPublic }
+        const allTransactions = await Transaction.find({ 
+            userId: { $in: userIdsFromPublic }
         }).sort({ timestamp: -1 });
 
         // 3. Get the list of all unique cities in the employee's state/country
@@ -304,6 +319,7 @@ app.get('/api/employee/dashboard/:employeeId', async (req, res) => {
 });
 
 // --- 📝 COMPLAINTS ROUTES ---
+
 app.post('/api/complaints', async (req, res) => {
     const { userid, complaintType, description } = req.body;
     try {
