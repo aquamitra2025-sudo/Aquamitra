@@ -59,7 +59,8 @@ function EmployeeDashboard() {
                 setLoading(true);
                 setError(null);
                 
-                const response = await axios.get(`http://localhost:5000/api/employee/dashboard/${employeeId}`, {
+                // --- MODIFIED LINE ---
+                const response = await axios.get(`https://aquamitra-1.onrender.com/api/employee/dashboard/${employeeId}`, {
                     params: { city: selectedCity, date: selectedDate }
                 });
                 

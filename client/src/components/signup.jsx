@@ -28,7 +28,8 @@ function SignupPage() {
     
     const roleMap = { user: 'Household / Public', employee: 'Government / Municipal' };
     const roleApiEndpoint = { user: 'users', employee: 'employees' };
-    const API_BASE_URL = "http://localhost:5000"; 
+    // --- MODIFIED LINE ---
+    const API_BASE_URL = "https://aquamitra-1.onrender.com"; 
 
     const handleSignup = async (e) => {
         e.preventDefault();

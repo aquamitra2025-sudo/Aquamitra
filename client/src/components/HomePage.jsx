@@ -6,10 +6,16 @@ import {
     CheckCircle, 
     Users, 
     Shield, 
-    BarChart3 
+    BarChart3,
+    Youtube // New Icon for Video Link
 } from 'lucide-react'; 
 import logoPath from '../assets/logo.png'; 
-import videoPath from '../assets/AQUA-MITRA-2-1.mp4'; // <--- NEW VIDEO IMPORT
+// import videoPath from '../assets/AQUA-MITRA-2-1.mp4'; // REMOVED: No longer using local video file
+
+// --- Placeholder for Google Drive Link ---
+// NOTE: Replace 'YOUR_GOOGLE_DRIVE_LINK_HERE' with the actual shared link
+const GOOGLE_DRIVE_VIDEO_LINK = 'YOUR_GOOGLE_DRIVE_LINK_HERE'; 
+// ------------------------------------------
 
 // --- Custom Logo Component (Navbar/Hero Size) ---
 const CustomLogo = () => (
@@ -25,7 +31,6 @@ const HomePage = () => {
             <div className="min-h-screen bg-gradient-to-b from-indigo-950 to-gray-900">
                 
                 {/* === 1. Hero Section === */}
-                {/* ... (Hero section content remains the same) ... */}
                 <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
                     <div className="text-center">
                         <h1 className="text-4xl md:text-6xl font-bold font-serif text-white mb-6">
@@ -64,7 +69,7 @@ const HomePage = () => {
                             <p className="text-lg text-gray-300 mb-6 leading-relaxed">
                                 Aquamitra is a comprehensive water management platform that bridges the gap between households and government agencies. We provide real-time insights, predictive analytics, and seamless communication tools to ensure sustainable water usage across communities.
                             </p>
-                            <div className="space-y-4">
+                            <div className="space-y-4 mb-6"> {/* Added margin bottom to separate from link */}
                                 {/* THEME: Check circles to sharp cyan */}
                                 <div className="flex items-start space-x-3">
                                     <CheckCircle className="h-6 w-6 text-cyan-400 mt-0.5" />
@@ -79,31 +84,37 @@ const HomePage = () => {
                                     <span className="text-gray-300">Community-government collaboration tools</span>
                                 </div>
                             </div>
+
+                            {/* === NEW: Google Drive Link Button === */}
+                            <a 
+                                href={GOOGLE_DRIVE_VIDEO_LINK} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center bg-indigo-700 hover:bg-indigo-600 text-white px-5 py-2 rounded-lg font-semibold transition-colors shadow-lg mt-4"
+                            >
+                                Watch Platform Demo (Google Drive) <Youtube className="ml-2 h-5 w-5" />
+                            </a>
+                            {/* ================================== */}
+
                         </div>
                         
-                        {/* === VIDEO BLOCK ADDED HERE ===
-                            We use the HTML <video> tag with the imported videoPath.
-                            'controls' allows the user to play/pause. 'autoPlay' and 'loop' 
-                            can be added for an automatic background effect.
-                        */}
+                        {/* === IMAGE BLOCK ADDED HERE (Replacing Video) === */}
+                        {/* Use the logo or a placeholder image to maintain layout and style */}
                         <div className="bg-gray-800/50 rounded-2xl p-4 flex items-center justify-center shadow-xl border border-blue-800">
-                            <video 
-                                className="w-full h-auto rounded-xl shadow-2xl border border-cyan-700/50"
-                                src={videoPath} 
-                                title="Aquamitra Platform Demo Video"
-                                controls // Allows the user to play/pause
-                                poster={logoPath} // Use the logo as a placeholder before playback
-                            >
-                                Your browser does not support the video tag.
-                            </video>
+                            <div className="w-full h-80 rounded-xl flex items-center justify-center bg-gray-900 border border-cyan-700/50 relative overflow-hidden">
+                                <CustomLogo />
+                                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent flex items-end justify-center pb-4">
+                                    <p className="text-cyan-400 font-bold text-lg">Click button on the left to view demo</p>
+                                </div>
+                            </div>
                         </div>
+                        {/* ================================================== */}
                     </div>
                 </section>
 
                 {/* --- */}
 
                 {/* === 3. Who We Are Section (Mission, Values, Approach) === */}
-                {/* ... (Section 3 content remains the same) ... */}
                 <section className="bg-gray-900 py-16 border-t border-b border-indigo-900">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center mb-12">
@@ -153,7 +164,6 @@ const HomePage = () => {
                 {/* --- */}
 
                 {/* === 4. Our Solutions Section (Household/Government) === */}
-                {/* ... (Section 4 content remains the same) ... */}
                 <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
                     <div className="text-center mb-12">
                         <h2 className="text-3xl font-bold font-serif text-white mb-4">Optimized Solutions for Every Stakeholder</h2>
@@ -210,7 +220,6 @@ const HomePage = () => {
                 {/* --- */}
 
                 {/* === 5. CTA Section === */}
-                {/* ... (CTA section content remains the same) ... */}
                 <section className="bg-indigo-900 py-16 border-t border-cyan-900">
                     <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                         <h2 className="text-3xl font-bold font-serif text-white mb-4">Ready to Dive into Smart Water Management?</h2>

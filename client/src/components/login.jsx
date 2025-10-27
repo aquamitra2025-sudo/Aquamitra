@@ -32,7 +32,8 @@ function LoginPage() {
         setLoading(true);
 
         try {
-            const url = `http://localhost:5000/api/${role}s/login`;
+            // --- MODIFIED LINE ---
+            const url = `https://aquamitra-1.onrender.com/api/${role}s/login`;
             await axios.post(url, { userid, password }); 
             
             login(userid, role);
