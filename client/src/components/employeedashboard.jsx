@@ -6,7 +6,7 @@ import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { format, subDays, startOfWeek, getWeek, getYear, isToday } from 'date-fns';
 import { TrendingUp, AlertTriangle, Users, Download, Filter } from 'lucide-react'; 
-import logoPath from '../assets/logo.png'; // <--- ADDED IMPORT
+import logoPath from '../assets/logo.png';
 
 // --- Custom Logo Component (Icon Size) ---
 const CustomLogoIcon = ({ className }) => (
@@ -39,7 +39,8 @@ const StatsCard = ({ title, value, detail, Icon, bgColor, textColor }) => (
 
 
 function EmployeeDashboard() {
-    const { user: employeeId, logout } = useAuth();
+    // Renamed employeeId to userId to better reflect the useAuth output
+    const { user: userId, logout } = useAuth(); 
     const [employeeDetails, setEmployeeDetails] = useState(null);
     const [transactions, setTransactions] = useState([]);
     const [view, setView] = useState('daily');
@@ -49,104 +50,146 @@ function EmployeeDashboard() {
     const [selectedCity, setSelectedCity] = useState('all');
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-    // ... (rest of the component logic remains the same)
-
+    /**
+     * Correction 1: Robust Data Fetching
+     * - Checks for userId (employeeId) availability.
+     * - Ensures transactions state is set to an empty array on success if no data is returned, or on error.
+     */
     useEffect(() => {
-        if (!employeeId) return;
+        // Essential check: Do not proceed if the user ID is not available.
+        if (!userId) {
+            setLoading(false);
+            return; 
+        }
 
         const fetchData = async () => {
             try {
                 setLoading(true);
                 setError(null);
                 
-                // --- MODIFIED LINE ---
-                const response = await axios.get(`https://aquamitra-1.onrender.com/api/employee/dashboard/${employeeId}`, {
+                // Using userId for the endpoint path
+                const response = await axios.get(`https://aquamitra-1.onrender.com/api/employee/dashboard/${userId}`, {
                     params: { city: selectedCity, date: selectedDate }
                 });
                 
                 setEmployeeDetails(response.data.employeeDetails);
-                setTransactions(response.data.transactions);
+                // Ensure transactions is always an array
+                setTransactions(response.data.transactions || []);
                 
-                if (response.data.cities) {
-                    setAvailableCities(response.data.cities);
+                const fetchedCities = response.data.cities;
+                if (Array.isArray(fetchedCities) && fetchedCities.length > 0) {
+                    setAvailableCities([...new Set(fetchedCities)]); 
                 } else {
                     setAvailableCities(["Central Reservoir", "Northern Zone", "Southern Zone", "Industrial Hub", "Rural Outskirts"]);
                 }
 
             } catch (err) {
+                console.error("Dashboard Fetch Error:", err);
                 setError(err.response?.data?.message || "Could not load dashboard data.");
+                setTransactions([]); // Clear data on error
             } finally {
                 setLoading(false);
             }
         };
 
         fetchData();
-    }, [employeeId, selectedCity, selectedDate]);
+    }, [userId, selectedCity, selectedDate]); // Dependency array is correct
 
     const dashboardMetrics = useMemo(() => {
-        const todaysTransactions = transactions.filter(t => isToday(new Date(t.timestamp)));
-        const totalConsumptionToday = todaysTransactions.reduce((acc, curr) => acc + curr.amount, 0);
-        const consumptionByCity = todaysTransactions.reduce((acc, curr) => {
+        // Calculate metrics based ONLY on transactions relevant to the selected date
+        const filteredTransactions = transactions.filter(t => format(new Date(t.timestamp), 'yyyy-MM-dd') === selectedDate);
+        
+        const totalConsumptionToday = filteredTransactions.reduce((acc, curr) => acc + curr.amount, 0);
+        const consumptionByCity = filteredTransactions.reduce((acc, curr) => {
             const city = curr.city || 'Unassigned'; 
             acc[city] = (acc[city] || 0) + curr.amount;
             return acc;
         }, {});
+        
+        // Note: Total allocation is calculated across ALL fetched transactions, which may be more than one day
         const totalAllocated = transactions.reduce((acc, curr) => acc + (curr.allocated || 500), 0); 
         const totalRemaining = totalAllocated - totalConsumptionToday;
+        
+        const totalHouseholds = new Set(transactions.map(t => t.householdId || t.userid)).size;
+        const cityCount = selectedCity === 'all' ? availableCities.length : (selectedCity ? 1 : 0);
+
+        const consumptionPercentage = totalAllocated > 0 ? (totalConsumptionToday / totalAllocated) * 100 : 0;
         const topCity = Object.entries(consumptionByCity).sort((a, b) => b[1] - a[1])[0];
 
         return {
             totalAllocated,
             totalConsumptionToday,
             totalRemaining,
-            totalHouseholds: new Set(transactions.map(t => t.householdId || t.userid)).size, 
-            cityCount: selectedCity === 'all' ? availableCities.length : 1,
-            consumptionPercentage: totalAllocated > 0 ? (totalConsumptionToday / totalAllocated) * 100 : 0,
+            totalHouseholds,
+            cityCount,
+            consumptionPercentage,
             topCityToday: topCity ? { name: topCity[0], amount: topCity[1] } : { name: 'N/A', amount: 0 },
             cityPerformance: Object.entries(consumptionByCity).sort((a, b) => b[1] - a[1])
         };
-    }, [transactions, availableCities, selectedCity]);
+    }, [transactions, availableCities, selectedCity, selectedDate]);
     
+    /**
+     * Correction 2: Improved Chart Data Aggregation
+     * - Uses a dedicated `dateForSorting` object to ensure consistent time grouping.
+     * - The `date` object itself is stored in the aggregated data for proper sorting.
+     */
     const chartData = useMemo(() => {
         if (transactions.length === 0) return { labels: [], datasets: [] };
         const timeAggregatedData = {};
         const allCitiesInChart = [...new Set([...availableCities, ...transactions.map(t => t.city || 'Unassigned')])].filter(c => c !== 'all').sort();
-        const now = new Date();
-
+        
         transactions.forEach(t => {
             const date = new Date(t.timestamp);
+            if (isNaN(date)) return; // Skip invalid dates
+            
             let key;
+            let dateForSorting;
+            
             switch (view) {
-                case 'weekly': key = format(startOfWeek(date, { weekStartsOn: 1 }), 'yyyy-ww'); break;
-                case 'monthly': key = format(date, 'yyyy-MM'); break;
-                case 'yearly': key = getYear(date).toString(); break;
-                default: 
-                    if (date < subDays(now, 6)) return;
-                    key = format(date, 'yyyy-MM-dd'); break;
+                case 'weekly': 
+                    dateForSorting = startOfWeek(date, { weekStartsOn: 1 });
+                    key = format(dateForSorting, 'yyyy-ww');
+                    break;
+                case 'monthly': 
+                    dateForSorting = new Date(date.getFullYear(), date.getMonth(), 1); // Start of month
+                    key = format(dateForSorting, 'yyyy-MM'); 
+                    break;
+                case 'yearly': 
+                    dateForSorting = new Date(date.getFullYear(), 0, 1); // Start of year
+                    key = getYear(dateForSorting).toString(); 
+                    break;
+                default: // 'daily'
+                    dateForSorting = new Date(date.getFullYear(), date.getMonth(), date.getDate()); // Start of day
+                    key = format(dateForSorting, 'yyyy-MM-dd'); 
+                    break;
             }
+
             if (!timeAggregatedData[key]) {
-                timeAggregatedData[key] = { date: date, ...Object.fromEntries(allCitiesInChart.map(c => [c, 0])) };
+                timeAggregatedData[key] = { date: dateForSorting, ...Object.fromEntries(allCitiesInChart.map(c => [c, 0])) };
             }
+            
             const city = t.city || 'Unassigned';
             if (allCitiesInChart.includes(city)) {
-                   timeAggregatedData[key][city] = (timeAggregatedData[key][city] || 0) + t.amount;
+                timeAggregatedData[key][city] = (timeAggregatedData[key][city] || 0) + t.amount;
             }
         });
         
-        const sortedData = Object.entries(timeAggregatedData).sort((a, b) => a[1].date - b[1].date);
+        // Sort based on the stored date object's timestamp
+        const sortedData = Object.values(timeAggregatedData).sort((a, b) => a.date.getTime() - b.date.getTime());
         
-        const labels = sortedData.map(([key, value]) => {
+        const labels = sortedData.map(value => {
             switch (view) {
-                case 'weekly': return `Week ${getWeek(value.date, { weekStartsOn: 1 })}`;
+                // Included year in week/month labels for clarity
+                case 'weekly': return `Wk ${getWeek(value.date, { weekStartsOn: 1 })}/${getYear(value.date)}`;
                 case 'monthly': return format(value.date, 'MMM yyyy');
-                case 'yearly': return key;
+                case 'yearly': return format(value.date, 'yyyy');
                 default: return format(value.date, 'MMM d');
             }
         });
 
         const datasets = allCitiesInChart.map((city, index) => ({
             label: city,
-            data: sortedData.map(([key, value]) => value[city] || 0),
+            data: sortedData.map(value => value[city] || 0),
             backgroundColor: `hsl(${(index * 35 + 200) % 360}, 70%, 50%)`, 
             borderColor: `hsl(${(index * 35 + 200) % 360}, 80%, 70%)`,
         }));
@@ -305,7 +348,7 @@ function EmployeeDashboard() {
                     
                     {/* City Performance List */}
                     <div className="lg:col-span-1 bg-gray-800 p-6 rounded-xl shadow-xl border border-blue-900">
-                        <h2 className="text-xl font-semibold text-white mb-4 border-b pb-2 border-gray-700">Region Performance (Today)</h2>
+                        <h2 className="text-xl font-semibold text-white mb-4 border-b pb-2 border-gray-700">Region Performance ({format(new Date(selectedDate), 'MMM d, yyyy')})</h2>
                         <div className="space-y-4 max-h-96 overflow-y-auto">
                             {dashboardMetrics.cityPerformance.length > 0 ? (
                                 dashboardMetrics.cityPerformance.map(([city, amount]) => (
