@@ -4,9 +4,9 @@ import useAuth from '../hooks/useauth';
 import axios from 'axios';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
-import { format, subDays, startOfWeek, getWeek, getYear, isToday } from 'date-fns';
+import { format, subDays, startOfWeek, getWeek, getYear } from 'date-fns';
 import { TrendingUp, AlertTriangle, Users, Download, Filter } from 'lucide-react'; 
-import logoPath from '../assets/logo.png';
+import logoPath from '../assets/logo.png'; 
 
 // --- Custom Logo Component (Icon Size) ---
 const CustomLogoIcon = ({ className }) => (
@@ -51,9 +51,9 @@ function EmployeeDashboard() {
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
     /**
-     * Correction 1: Robust Data Fetching
-     * - Checks for userId (employeeId) availability.
-     * - Ensures transactions state is set to an empty array on success if no data is returned, or on error.
+     * CORRECTION: Robust Data Fetching
+     * - Checks for userId availability.
+     * - Consumes the new enriched transaction data from the backend.
      */
     useEffect(() => {
         // Essential check: Do not proceed if the user ID is not available.
@@ -67,9 +67,9 @@ function EmployeeDashboard() {
                 setLoading(true);
                 setError(null);
                 
-                // Using userId for the endpoint path
+                // The backend now handles the data enrichment (attaching 'city')
                 const response = await axios.get(`https://aquamitra-1.onrender.com/api/employee/dashboard/${userId}`, {
-                    params: { city: selectedCity, date: selectedDate }
+                    params: { city: selectedCity, date: selectedDate } 
                 });
                 
                 setEmployeeDetails(response.data.employeeDetails);
@@ -80,6 +80,7 @@ function EmployeeDashboard() {
                 if (Array.isArray(fetchedCities) && fetchedCities.length > 0) {
                     setAvailableCities([...new Set(fetchedCities)]); 
                 } else {
+                    // Fallback to mock cities if the backend doesn't return them
                     setAvailableCities(["Central Reservoir", "Northern Zone", "Southern Zone", "Industrial Hub", "Rural Outskirts"]);
                 }
 
@@ -96,21 +97,26 @@ function EmployeeDashboard() {
     }, [userId, selectedCity, selectedDate]); // Dependency array is correct
 
     const dashboardMetrics = useMemo(() => {
-        // Calculate metrics based ONLY on transactions relevant to the selected date
-        const filteredTransactions = transactions.filter(t => format(new Date(t.timestamp), 'yyyy-MM-dd') === selectedDate);
+        // Filter transactions only for the date selected in the filter
+        const filteredTransactions = transactions.filter(t => 
+            // Use 'timestamp' for comparison; the backend sends it as ISO string
+            format(new Date(t.timestamp), 'yyyy-MM-dd') === selectedDate
+        );
         
         const totalConsumptionToday = filteredTransactions.reduce((acc, curr) => acc + curr.amount, 0);
+        
+        // This now reads the correctly enriched 'city' field
         const consumptionByCity = filteredTransactions.reduce((acc, curr) => {
             const city = curr.city || 'Unassigned'; 
             acc[city] = (acc[city] || 0) + curr.amount;
             return acc;
         }, {});
         
-        // Note: Total allocation is calculated across ALL fetched transactions, which may be more than one day
+        // Total allocated is calculated across ALL fetched transactions (may be multi-day)
         const totalAllocated = transactions.reduce((acc, curr) => acc + (curr.allocated || 500), 0); 
         const totalRemaining = totalAllocated - totalConsumptionToday;
         
-        const totalHouseholds = new Set(transactions.map(t => t.householdId || t.userid)).size;
+        const totalHouseholds = new Set(transactions.map(t => t.householdId || t.userId)).size;
         const cityCount = selectedCity === 'all' ? availableCities.length : (selectedCity ? 1 : 0);
 
         const consumptionPercentage = totalAllocated > 0 ? (totalConsumptionToday / totalAllocated) * 100 : 0;
@@ -129,18 +135,18 @@ function EmployeeDashboard() {
     }, [transactions, availableCities, selectedCity, selectedDate]);
     
     /**
-     * Correction 2: Improved Chart Data Aggregation
-     * - Uses a dedicated `dateForSorting` object to ensure consistent time grouping.
-     * - The `date` object itself is stored in the aggregated data for proper sorting.
+     * CORRECTION: Improved Chart Data Aggregation
+     * - Uses a dedicated date object for correct sorting and aggregation key creation (daily/weekly/monthly/yearly).
      */
     const chartData = useMemo(() => {
         if (transactions.length === 0) return { labels: [], datasets: [] };
+        
         const timeAggregatedData = {};
         const allCitiesInChart = [...new Set([...availableCities, ...transactions.map(t => t.city || 'Unassigned')])].filter(c => c !== 'all').sort();
         
         transactions.forEach(t => {
             const date = new Date(t.timestamp);
-            if (isNaN(date)) return; // Skip invalid dates
+            if (isNaN(date.getTime())) return; // Skip invalid dates
             
             let key;
             let dateForSorting;
@@ -151,15 +157,15 @@ function EmployeeDashboard() {
                     key = format(dateForSorting, 'yyyy-ww');
                     break;
                 case 'monthly': 
-                    dateForSorting = new Date(date.getFullYear(), date.getMonth(), 1); // Start of month
+                    dateForSorting = new Date(date.getFullYear(), date.getMonth(), 1); 
                     key = format(dateForSorting, 'yyyy-MM'); 
                     break;
                 case 'yearly': 
-                    dateForSorting = new Date(date.getFullYear(), 0, 1); // Start of year
+                    dateForSorting = new Date(date.getFullYear(), 0, 1); 
                     key = getYear(dateForSorting).toString(); 
                     break;
                 default: // 'daily'
-                    dateForSorting = new Date(date.getFullYear(), date.getMonth(), date.getDate()); // Start of day
+                    dateForSorting = new Date(date.getFullYear(), date.getMonth(), date.getDate()); 
                     key = format(dateForSorting, 'yyyy-MM-dd'); 
                     break;
             }
@@ -168,7 +174,7 @@ function EmployeeDashboard() {
                 timeAggregatedData[key] = { date: dateForSorting, ...Object.fromEntries(allCitiesInChart.map(c => [c, 0])) };
             }
             
-            const city = t.city || 'Unassigned';
+            const city = t.city || 'Unassigned'; // Reads the enriched 'city' field
             if (allCitiesInChart.includes(city)) {
                 timeAggregatedData[key][city] = (timeAggregatedData[key][city] || 0) + t.amount;
             }
@@ -179,7 +185,6 @@ function EmployeeDashboard() {
         
         const labels = sortedData.map(value => {
             switch (view) {
-                // Included year in week/month labels for clarity
                 case 'weekly': return `Wk ${getWeek(value.date, { weekStartsOn: 1 })}/${getYear(value.date)}`;
                 case 'monthly': return format(value.date, 'MMM yyyy');
                 case 'yearly': return format(value.date, 'yyyy');
