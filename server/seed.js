@@ -30,10 +30,6 @@ async function seed() {
     try {
         console.log("Starting seed process...");
         
-        // Clear old Transaction data
-        await transactions.deleteMany({});
-        console.log("Cleared existing transaction data.");
-
         // Load kjson file
         const kjsonPath = path.join(__dirname, "user_id_aqm001_365 (1).json"); 
         const kjsonData = JSON.parse(fs.readFileSync(kjsonPath, "utf-8"));
