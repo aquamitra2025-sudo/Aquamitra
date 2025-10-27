@@ -14,7 +14,7 @@ import logoPath from '../assets/logo.png';
 
 // --- Placeholder for Google Drive Link ---
 // NOTE: Replace 'YOUR_GOOGLE_DRIVE_LINK_HERE' with the actual shared link
-const GOOGLE_DRIVE_VIDEO_LINK = 'YOUR_GOOGLE_DRIVE_LINK_HERE'; 
+const GOOGLE_DRIVE_VIDEO_LINK = 'https://drive.google.com/file/d/1oNWpC97BYlX6VDvk_kWQ_LkqtIHG9TBA/view?usp=sharing'; 
 // ------------------------------------------
 
 // --- Custom Logo Component (Navbar/Hero Size) ---

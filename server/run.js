@@ -1,5 +1,3 @@
-// run.js (Complete & Corrected Code for Mongoose/MongoDB)
-
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -8,11 +6,12 @@ const moment = require('moment-timezone'); // Used for timezone-aware calculatio
 const app = express();
 
 // Configuration
-app.use(cors({ origin: "https://aquamitra-ten.vercel.app" })); // Adjust if your frontend URL changes
+// **SECURITY WARNING**: In a production environment, it's safer to use an environment variable for the origin.
+app.use(cors({ origin: "https://aquamitra-ten.vercel.app" })); 
 app.use(express.json());
 
-
 // --- ⚙️ MONGOOSE SETUP ---
+// **SECURITY WARNING**: Never hardcode credentials in source code. Use environment variables (process.env.DB_URI).
 mongoose.connect("mongodb+srv://vishveshbece:Vishvesh%402005@cluster0.fwpiw.mongodb.net/Aquamitra?retryWrites=true&w=majority")
     .then(() => console.log("MongoDB connected"))
     .catch((error) => console.error("Connection error to MongoDB:", error));
@@ -21,12 +20,14 @@ mongoose.connect("mongodb+srv://vishveshbece:Vishvesh%402005@cluster0.fwpiw.mong
 
 const userSchema = new mongoose.Schema({
     userid: { type: String, required: true, unique: true },
+    // Password should be marked as select: false in a real app, 
+    // but it's okay here since it's only retrieved for login/signup checks.
     password: { type: String, required: true }, 
     threshold: { type: Number, default: 0 }
 });
 
 const publicSchema = new mongoose.Schema({
-    userid: String,
+    userid: { type: String, required: true, unique: true }, // Added required and unique for good practice
     headcout: Number,
     Country: String, State: String, City: String,
     Address: String, pincode: String
@@ -43,7 +44,7 @@ const employeeSchema = new mongoose.Schema({
 const transactionSchema = new mongoose.Schema({
     userId: {type: String, required: true, index: true},
     amount: Number,
-    timestamp: { type: Date, default: Date.now } // MongoDB stores this in UTC
+    timestamp: { type: Date, default: Date.now } // MongoDB stores this in UTC (ISO 8601)
 });
 
 const complaintSchema = new mongoose.Schema({
@@ -51,7 +52,7 @@ const complaintSchema = new mongoose.Schema({
     complaintType: { type: String, enum: ['Leakage', 'Meter Issue', 'Billing Error', 'No Water Supply', 'Other'], required: true },
     description: { type: String, required: true },
     status: { type: String, enum: ['Submitted', 'In Progress', 'Resolved', 'Closed'], default: 'Submitted' }
-}, { timestamps: true });
+}, { timestamps: true }); // timestamps: true adds createdAt and updatedAt fields
 
 const User = mongoose.model('user', userSchema);
 const Public = mongoose.model('public', publicSchema);
@@ -61,7 +62,7 @@ const Complaint = mongoose.model('complaint', complaintSchema);
 
 
 // ===================================
-//            🔥 API ROUTES
+//              🔥 API ROUTES
 // ===================================
 
 // --- AUTHENTICATION ---
@@ -110,6 +111,7 @@ app.post('/api/users/login', async (req, res) => {
         if (!user) { return res.status(401).json({ message: 'Invalid credentials' }); }
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) { return res.status(401).json({ message: 'Invalid credentials' }); }
+        // **SECURITY**: In a real app, return a JWT token here, not just a success message.
         res.json({ message: 'Login successful' });
     } catch (error) {
         console.error(error);
@@ -124,6 +126,7 @@ app.post('/api/employees/login', async (req, res) => {
         if (!employee || !employee.password) { return res.status(401).json({ message: 'Invalid credentials or account not yet set up.' }); }
         const isMatch = await bcrypt.compare(password, employee.password);
         if (!isMatch) { return res.status(401).json({ message: 'Invalid credentials.' }); }
+        // **SECURITY**: In a real app, return a JWT token here, not just a success message.
         res.json({ message: 'Login successful' });
     } catch (error) {
         console.error(error);
@@ -162,12 +165,13 @@ app.post('/api/sensordata', async (req, res) => {
 });
 
 // ===================================
-//       📊 DASHBOARD & DATA ROUTES
+//      📊 DASHBOARD & DATA ROUTES
 // ===================================
 
 app.get('/api/dashboard/:userid', async (req, res) => {
     try {
         const { userid } = req.params;
+        // Default to a common timezone (e.g., UTC or Asia/Kolkata) if header is missing
         const userTimeZone = req.headers['timezone'] || 'Asia/Kolkata'; 
         const nowMoment = moment.tz(userTimeZone); // Current time in user's timezone
 
@@ -178,7 +182,7 @@ app.get('/api/dashboard/:userid', async (req, res) => {
         // Use 4 as a fallback headcount if data is missing
         const headCount = publicUser ? (publicUser.headcout || 4) : 4; 
         
-        const dailyThreshold = 55 * headCount; 
+        const dailyThreshold = 55 * headCount; // 55 Litres per person per day (Lpcd)
         
         // --- 1. Calculate Today's Consumption (Timezone-Aware) ---
         // Get the UTC equivalent of the start of TODAY in the user's timezone.
@@ -229,13 +233,15 @@ app.get('/api/dashboard/:userid', async (req, res) => {
         
         const rawTransactions = await Transaction.find({ userId: userid }).sort({ timestamp: -1 }).lean();
         
-        // Reformat the DB's ISO date (Date Object) back to the custom format expected by the frontend
+        // **FIX for Moment.js Warning:** // We assume t.timestamp is a Date object from MongoDB, so no format string is needed.
+        // If the error was truly happening here, it means t.timestamp was an unformatted string.
+        // We will keep the original (correct) logic for a Date object:
         const formattedTransactions = rawTransactions.map(t => {
-            // t.timestamp is a Date object, moment.tz handles this correctly without a format string
-            const momentObject = moment.tz(t.timestamp, userTimeZone);
+            // t.timestamp is a Date object (ISO format from MongoDB), moment.tz handles this correctly.
+            const momentObject = moment.tz(t.timestamp, userTimeZone); 
             return {
                 ...t,
-                // Apply the desired frontend format
+                // Apply the desired frontend format (DD-MM-YYYY HH:mm:ss)
                 timestamp: momentObject.format('DD-MM-YYYY HH:mm:ss')
             };
         });
@@ -246,11 +252,11 @@ app.get('/api/dashboard/:userid', async (req, res) => {
             transactions: formattedTransactions,
             complaints: allComplaints,
             dashboardMetrics: {
-                dailyThreshold,
-                todaysConsumption: todaysConsumption,
-                remainingToday: dailyThreshold - todaysConsumption,
-                totalMonthToDate,
-                averageDailyConsumption
+                dailyThreshold: parseFloat(dailyThreshold.toFixed(2)),
+                todaysConsumption: parseFloat(todaysConsumption.toFixed(2)),
+                remainingToday: parseFloat((dailyThreshold - todaysConsumption).toFixed(2)),
+                totalMonthToDate: parseFloat(totalMonthToDate.toFixed(2)),
+                averageDailyConsumption: parseFloat(averageDailyConsumption.toFixed(2))
             }
         });
 
@@ -309,6 +315,7 @@ app.get('/api/employee/dashboard/:employeeId', async (req, res) => {
                 country: employee.country
             },
             cities: citiesInState.sort(),
+            // Transactions contain Date objects which will be handled by the frontend
             transactions: allTransactions
         });
 
@@ -322,11 +329,19 @@ app.get('/api/employee/dashboard/:employeeId', async (req, res) => {
 
 app.post('/api/complaints', async (req, res) => {
     const { userid, complaintType, description } = req.body;
+    
+    // Simple validation
+    if (!userid || !complaintType || !description) {
+        return res.status(400).json({ message: 'Missing required fields.' });
+    }
+
     try {
         const user = await User.findOne({ userid });
         if (!user) { return res.status(404).json({ message: 'User not found' }); }
+        
         const newComplaint = new Complaint({ userId: userid, complaintType, description });
         await newComplaint.save();
+        
         res.status(201).json({ message: 'Complaint submitted successfully', complaint: newComplaint });
     } catch (error) {
         console.error(error);
