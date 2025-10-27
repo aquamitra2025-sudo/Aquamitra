@@ -66,8 +66,7 @@ function UserDashboard() {
                 const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
                 // 1. API call to fetch dashboard data
-                // --- MODIFIED LINE ---
-                const response = await axios.get(`https://aquamitra-1.onrender.com/api/dashboard/${user}`, {
+                const response = await axios.get(`http://localhost:5000/api/dashboard/${user}`, {
                     headers: { 'Timezone': userTimeZone }
                 });
 
@@ -184,8 +183,7 @@ function UserDashboard() {
         setFormSubmitting(true); 
         setFormMessage({ type: '', content: '' }); 
         try { 
-            // --- MODIFIED LINE ---
-            const response = await axios.post('https://aquamitra-1.onrender.com/api/complaints', { userid: user, complaintType, description, }); 
+            const response = await axios.post('http://localhost:5000/api/complaints', { userid: user, complaintType, description, }); 
             setFormMessage({ type: 'success', content: 'Complaint submitted successfully!' }); 
             setComplaints(prev => [response.data.complaint, ...prev]); 
             setDescription(''); 

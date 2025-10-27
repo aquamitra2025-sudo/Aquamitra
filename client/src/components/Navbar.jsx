@@ -1,72 +1,86 @@
+// src/components/Navbar.jsx
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Droplets, LogOut } from 'lucide-react';
-import useAuth from '../hooks/useauth'; // Import your authentication hook
+import { LogOut, LayoutDashboard } from 'lucide-react';
+import useAuth from '../hooks/useauth';
+import logoPath from '../assets/logo.png'; // <--- ADDED IMPORT
+
+// --- Custom Logo Component (Navbar Size) ---
+const CustomLogo = () => (
+    // Use the imported path
+    <img src={logoPath} alt="Aquamitra Logo" className="h-6 w-6 drop-shadow-lg object-contain" />
+);
+// --- End Custom Logo Component ---
 
 const Navbar = () => {
-  const { isAuthenticated, user, role, logout } = useAuth();
-  const location = useLocation();
+    const { isAuthenticated, user, role, logout } = useAuth();
+    const location = useLocation();
 
-  // Determine the dashboard link based on the user's role
-  const dashboardPath = role === 'user' ? '/userdashboard' : '/employeedashboard';
-  
-  // Display name or ID (adjust based on what your `user` object holds after login)
-  const displayName = user || 'Guest';
+    const dashboardPath = role === 'user' ? '/userdashboard' : '/employeedashboard';
+    const displayName = user?.split('@')[0] || 'Guest';
 
-  // Check if the current path is the login/signup page to potentially hide the main nav button
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+    const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
 
-  return (
-    <nav className="bg-white shadow-lg border-b border-blue-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo/Home Link */}
-          <Link to="/" className="flex items-center space-x-2">
-            <Droplets className="h-8 w-8 text-blue-600" />
-            <span className="text-xl font-bold text-gray-900">Aquamitra</span>
-          </Link>
+    const handleLogout = () => {
+        logout(); 
+    }
 
-          <div className="flex items-center space-x-4">
-            {isAuthenticated ? (
-              // Logged-in Navigation
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">
-                  Welcome, <span className="font-semibold">{displayName}</span>
-                </span>
-                
-                {/* Dashboard Link (always visible when logged in) */}
-                <Link 
-                  to={dashboardPath} 
-                  className="text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  Dashboard
-                </Link>
+    return (
+        // THEME: Dark navbar, sharp indigo border
+        <nav className="bg-gray-900 shadow-xl border-b-2 border-indigo-800 sticky top-0 z-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex justify-between items-center h-16">
+                    {/* Logo/Home Link */}
+                    <Link to="/" className="flex items-center space-x-2 cursor-pointer hover:opacity-90 transition-opacity">
+                        {/* Custom Logo Render */}
+                        <CustomLogo />
+                        <span className="text-xl font-bold text-white">Aquamitra</span>
+                    </Link>
 
-                {/* Logout Button */}
-                <button 
-                  onClick={logout} 
-                  className="flex items-center space-x-1 text-gray-500 hover:text-red-600 transition-colors"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Logout</span>
-                </button>
-              </div>
-            ) : (
-              // Logged-out Call to Action (Only show if not already on login/signup page)
-              !isAuthPage && (
-                <Link
-                  to="/login"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
-                >
-                  Login / Signup
-                </Link>
-              )
-            )}
-          </div>
-        </div>
-      </div>
-    </nav>
-  );
+                    <div className="flex items-center space-x-4">
+                        {isAuthenticated ? (
+                            // Logged-in Navigation
+                            <div className="flex items-center space-x-4">
+                                <span className="text-sm text-gray-400 hidden sm:inline">
+                                    Welcome, <span className="font-semibold text-cyan-400">{displayName}</span>
+                                </span>
+                                
+                                {/* Dashboard Link */}
+                                <Link 
+                                    to={dashboardPath}
+                                    // THEME: Link color to cyan/electric blue
+                                    className="text-cyan-400 hover:text-cyan-300 font-medium p-2 rounded-md transition-colors flex items-center space-x-1 hover:bg-gray-800"
+                                >
+                                    <LayoutDashboard className="h-5 w-5" />
+                                    <span className="hidden sm:inline">Dashboard</span>
+                                </Link>
+
+                                {/* Logout Button */}
+                                <button 
+                                    onClick={handleLogout} 
+                                    className="flex items-center space-x-1 text-gray-500 hover:text-red-400 transition-colors p-2 rounded-md hover:bg-gray-800"
+                                >
+                                    <LogOut className="h-5 w-5" />
+                                    <span className="hidden sm:inline">Logout</span>
+                                </button>
+                            </div>
+                        ) : (
+                            // Logged-out Call to Action
+                            !isAuthPage && (
+                                <Link
+                                    to="/login"
+                                    // THEME: Button to electric cyan
+                                    className="bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-4 py-2 rounded-lg font-medium shadow-lg transition-all duration-200 hover:shadow-cyan-500/30 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+                                >
+                                    Login / Signup
+                                </Link>
+                            )
+                        )}
+                    </div>
+                </div>
+            </div>
+        </nav>
+    );
 };
 
 export default Navbar;
