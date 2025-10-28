@@ -1,3 +1,5 @@
+// server.js
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -6,8 +8,20 @@ const moment = require('moment-timezone'); // Used for timezone-aware calculatio
 const app = express();
 
 // Configuration
-// **SECURITY WARNING**: In a production environment, it's safer to use an environment variable for the origin.
-app.use(cors({ origin: ["http://localhost:5173","https://aquamitra-ten.vercel.app"]})); 
+const allowedOrigins = ["http://localhost:5173", "https://aquamitra-ten.vercel.app"];
+
+// ⚠️ MODIFIED CORS POLICY: Allows whitelisted frontends AND non-browser clients (like ESP32, which sends a null origin).
+app.use(cors({ 
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like ESP32/Postman) OR allowed frontends
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`CORS block: Request from unauthorized origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    }
+})); 
 app.use(express.json());
 
 // --- ⚙️ MONGOOSE SETUP ---
@@ -20,14 +34,12 @@ mongoose.connect("mongodb+srv://vishveshbece:Vishvesh%402005@cluster0.fwpiw.mong
 
 const userSchema = new mongoose.Schema({
     userid: { type: String, required: true, unique: true },
-    // Password should be marked as select: false in a real app, 
-    // but it's okay here since it's only retrieved for login/signup checks.
     password: { type: String, required: true }, 
     threshold: { type: Number, default: 0 }
 });
 
 const publicSchema = new mongoose.Schema({
-    userid: { type: String, required: true, unique: true }, // Added required and unique for good practice
+    userid: { type: String, required: true, unique: true },
     headcout: Number,
     Country: String, State: String, City: String,
     Address: String, pincode: String
@@ -62,8 +74,59 @@ const Complaint = mongoose.model('complaint', complaintSchema);
 
 
 // ===================================
-//              🔥 API ROUTES
+//       🔥 API ROUTES
 // ===================================
+
+// --- SENSOR DATA RECEIPT (ESP32 DISPENSER LOGGING) ---
+app.post('/api/log', async (req, res) => {
+    // Note: The ESP32 sends 'userID' (uppercase D), so we use that here.
+    const { userID, amount, timestamp } = req.body; 
+
+    // 1. Basic Validation
+    if (!userID || typeof amount === 'undefined' || !timestamp) {
+        console.error("Missing fields:", req.body);
+        return res.status(400).json({ message: "Missing required fields: userID, amount, and timestamp are required." });
+    }
+
+    try {
+        const consumptionAmount = parseFloat(amount);
+        if (isNaN(consumptionAmount) || consumptionAmount <= 0) {
+            return res.status(400).json({ message: "Invalid 'amount' value. Must be a positive number." });
+        }
+
+        // 2. Parse Timestamp from the ESP32 format (DD-MM-YYYY HH:MM:SS)
+        const IST_TIMEZONE = 'Asia/Kolkata'; 
+        const parsedDate = moment.tz(timestamp, 'DD-MM-YYYY HH:mm:ss', IST_TIMEZONE);
+
+        if (!parsedDate.isValid()) {
+            console.error(`Invalid timestamp format received: ${timestamp}`);
+            return res.status(400).json({ message: "Invalid timestamp format. Use DD-MM-YYYY HH:mm:ss." });
+        }
+
+        // 3. Create and Save Transaction
+        const newTransaction = new Transaction({
+            userId: userID, // Schema uses lowercase 'userId'
+            amount: consumptionAmount,
+            // Convert the timezone-aware moment object to a standard JavaScript Date (which MongoDB saves as UTC)
+            timestamp: parsedDate.toDate() 
+        });
+
+        await newTransaction.save();
+        
+        // 4. Send Success Response 
+        res.status(201).json({ 
+            status: 'success', 
+            message: 'Dispensing log saved successfully.',
+            transactionId: newTransaction._id,
+            receivedAt: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('Error saving water dispenser data:', error);
+        res.status(500).json({ message: 'Internal server error while logging transaction.' });
+    }
+});
+
 
 // --- AUTHENTICATION ---
 
@@ -111,7 +174,6 @@ app.post('/api/users/login', async (req, res) => {
         if (!user) { return res.status(401).json({ message: 'Invalid credentials' }); }
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) { return res.status(401).json({ message: 'Invalid credentials' }); }
-        // **SECURITY**: In a real app, return a JWT token here, not just a success message.
         res.json({ message: 'Login successful' });
     } catch (error) {
         console.error(error);
@@ -126,7 +188,6 @@ app.post('/api/employees/login', async (req, res) => {
         if (!employee || !employee.password) { return res.status(401).json({ message: 'Invalid credentials or account not yet set up.' }); }
         const isMatch = await bcrypt.compare(password, employee.password);
         if (!isMatch) { return res.status(401).json({ message: 'Invalid credentials.' }); }
-        // **SECURITY**: In a real app, return a JWT token here, not just a success message.
         res.json({ message: 'Login successful' });
     } catch (error) {
         console.error(error);
@@ -134,10 +195,10 @@ app.post('/api/employees/login', async (req, res) => {
     }
 });
 
-// --- SENSOR DATA RECEIPT ---
+// --- SENSOR DATA RECEIPT (Existing, kept for compatibility if needed) ---
 
 app.post('/api/sensordata', async (req, res) => {
-    const { userid, DO, Temp } = req.body; // DO is water consumption (Dissolved Oxygen is irrelevant here)
+    const { userid, DO, Temp } = req.body; 
 
     if (!userid || !DO) {
         return res.status(400).json({ message: "Missing required fields: userid and DO are required." });
@@ -165,83 +226,54 @@ app.post('/api/sensordata', async (req, res) => {
 });
 
 // ===================================
-//      📊 DASHBOARD & DATA ROUTES
+//       📊 DASHBOARD & DATA ROUTES
 // ===================================
 
 app.get('/api/dashboard/:userid', async (req, res) => {
     try {
         const { userid } = req.params;
-        // Default to a common timezone (e.g., UTC or Asia/Kolkata) if header is missing
         const userTimeZone = req.headers['timezone'] || 'Asia/Kolkata'; 
-        const nowMoment = moment.tz(userTimeZone); // Current time in user's timezone
+        const nowMoment = moment.tz(userTimeZone); 
 
         const user = await User.findOne({ userid });
         if (!user) { return res.status(404).json({ message: 'User not found' }); }
         
         const publicUser = await Public.findOne({ userid });
-        // Use 4 as a fallback headcount if data is missing
         const headCount = publicUser ? (publicUser.headcout || 4) : 4; 
         
-        const dailyThreshold = 55 * headCount; // 55 Litres per person per day (Lpcd)
+        const dailyThreshold = 55 * headCount; 
         
-        // --- 1. Calculate Today's Consumption (Timezone-Aware) ---
-        // Get the UTC equivalent of the start of TODAY in the user's timezone.
+        // --- 1. Calculate Today's Consumption ---
         const todayStartUTC = nowMoment.clone().startOf('day').toDate();
         
         const todayConsumptionResult = await Transaction.aggregate([
-            { 
-                $match: { 
-                    userId: userid, 
-                    timestamp: { $gte: todayStartUTC } // Filter based on UTC time >= local start of day
-                } 
-            },
-            { 
-                $group: { 
-                    _id: null, 
-                    totalConsumption: { $sum: '$amount' } 
-                } 
-            }
+            { $match: { userId: userid, timestamp: { $gte: todayStartUTC } } },
+            { $group: { _id: null, totalConsumption: { $sum: '$amount' } } }
         ]);
 
         const todaysConsumption = todayConsumptionResult.length > 0 ? todayConsumptionResult[0].totalConsumption : 0;
         
-        // --- 2. Calculate Month-to-Date (Timezone-Aware) ---
-        // Get the UTC equivalent of the 1st day of the current month in the user's timezone
+        // --- 2. Calculate Month-to-Date ---
         const monthStartUTC = nowMoment.clone().startOf('month').toDate();
         
         const monthConsumptionResult = await Transaction.aggregate([
-            { 
-                $match: { 
-                    userId: userid, 
-                    timestamp: { $gte: monthStartUTC } 
-                } 
-            },
-            { 
-                $group: { 
-                    _id: null, 
-                    totalMonthToDate: { $sum: '$amount' } 
-                } 
-            }
+            { $match: { userId: userid, timestamp: { $gte: monthStartUTC } } },
+            { $group: { _id: null, totalMonthToDate: { $sum: '$amount' } } }
         ]);
 
         const totalMonthToDate = monthConsumptionResult.length > 0 ? monthConsumptionResult[0].totalMonthToDate : 0;
         
-        const daysPassed = nowMoment.date(); // Current day of the month (1-31)
+        const daysPassed = nowMoment.date(); 
         const averageDailyConsumption = totalMonthToDate / daysPassed;
 
         // --- 3. Fetch and Format Transactions & Complaints ---
         
         const rawTransactions = await Transaction.find({ userId: userid }).sort({ timestamp: -1 }).lean();
         
-        // **FIX for Moment.js Warning:** // We assume t.timestamp is a Date object from MongoDB, so no format string is needed.
-        // If the error was truly happening here, it means t.timestamp was an unformatted string.
-        // We will keep the original (correct) logic for a Date object:
         const formattedTransactions = rawTransactions.map(t => {
-            // t.timestamp is a Date object (ISO format from MongoDB), moment.tz handles this correctly.
             const momentObject = moment.tz(t.timestamp, userTimeZone); 
             return {
                 ...t,
-                // Apply the desired frontend format (DD-MM-YYYY HH:mm:ss)
                 timestamp: momentObject.format('DD-MM-YYYY HH:mm:ss')
             };
         });
@@ -315,7 +347,6 @@ app.get('/api/employee/dashboard/:employeeId', async (req, res) => {
                 country: employee.country
             },
             cities: citiesInState.sort(),
-            // Transactions contain Date objects which will be handled by the frontend
             transactions: allTransactions
         });
 
@@ -366,4 +397,4 @@ app.get('/api/complaints/:userid', async (req, res) => {
 // --- 🚀 SERVER START ---
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
