@@ -26,7 +26,7 @@ app.use(express.json());
 
 // --- ⚙️ MONGOOSE SETUP ---
 // **SECURITY WARNING**: Never hardcode credentials in source code. Use environment variables (process.env.DB_URI).
-mongoose.connect("mongodb+srv://vishveshbece:Vishvesh%402005@cluster0.fwpiw.mongodb.net/Aquamitra?retryWrites=true&w=majority")
+mongoose.connect("mongodb+srv://Aquamitra:Aqua2025@cluster0.q4rmqgu.mongodb.net/?appName=Cluster0")
     .then(() => console.log("MongoDB connected"))
     .catch((error) => console.error("Connection error to MongoDB:", error));
 
